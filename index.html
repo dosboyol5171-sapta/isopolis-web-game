@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Isopolis Farm - Low-Poly Life & Farming Simulator 3D</title>
+    <meta name="description" content="Simulasi kehidupan bertani 3D isometrik dengan grafis low-poly estetik, sistem texture pack ekspor/impor, kontrol sentuh seluler, dan mesin web super lancar." />
+    <meta property="og:title" content="Isopolis Farm - Low-Poly Life & Farming Simulator 3D" />
+    <meta property="og:description" content="Simulasi kehidupan bertani 3D isometrik dengan grafis low-poly estetik, sistem texture pack ekspor/impor, kontrol sentuh seluler, dan mesin web super lancar." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#4ade80" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="IsopolisFarm" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      /* Zero-dependency instant system styling */
+      #first-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        background-color: #070a13;
+        color: #f1f5f9;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: clamp(16px, 4vw, 32px);
+        box-sizing: border-box;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: opacity 0.4s ease-out;
+      }
+      #first-loader.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-900 text-slate-100 antialiased select-none touch-none overflow-hidden font-['Plus_Jakarta_Sans',sans-serif]">
+    <!-- Zero-Dependency Instant First Download & Boot Screen -->
+    <div id="first-loader">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 12px; font-size: 11px; letter-spacing: 0.08em; color: #64748b;">
+        <span>SYSTEM_BOOTLOADER // ISOPOLIS_CORE_v3</span>
+        <span id="fl-stage" style="color: #4ade80;">[DOWNLOADING_ENGINE]</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin: auto 0; width: 100%;">
+        <!-- Huge Crisp Percentage Text -->
+        <div id="fl-percent" style="font-size: clamp(68px, 17vw, 120px); font-weight: 900; line-height: 0.95; letter-spacing: -3px; color: #4ade80; text-shadow: 0 0 40px rgba(74, 222, 128, 0.25);">
+          0%
+        </div>
+
+        <!-- Total MB Progress Text -->
+        <div id="fl-size" style="font-size: clamp(15px, 4vw, 22px); font-weight: 700; color: #cbd5e1; margin-top: 14px; letter-spacing: 0.05em;">
+          0.00 MB / 4.85 MB
+        </div>
+
+        <!-- High-Tech Progress Bar -->
+        <div style="width: 100%; max-width: 440px; height: 10px; background: #0f172a; border-radius: 9999px; overflow: hidden; margin-top: 20px; border: 1px solid #334155; box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);">
+          <div id="fl-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #4ade80, #facc15); border-radius: 9999px; transition: width 0.06s ease-out; box-shadow: 0 0 12px rgba(74, 222, 128, 0.6);"></div>
+        </div>
+
+        <!-- Dynamic System Status Log -->
+        <div id="fl-status" style="font-size: 12px; font-weight: 600; color: #94a3b8; margin-top: 16px; letter-spacing: 0.04em;">
+          [INITIALIZING THREE.JS WEBGL RENDERER & ASSETS...]
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #1e293b; padding-top: 12px; font-size: 11px; color: #475569; letter-spacing: 0.06em;">
+        <span>MEMORY_HEAP: PREALLOCATED</span>
+        <span>STATUS: LIVE</span>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        var pctElem = document.getElementById('fl-percent');
+        var sizeElem = document.getElementById('fl-size');
+        var barElem = document.getElementById('fl-bar');
+        var statusElem = document.getElementById('fl-status');
+        var stageElem = document.getElementById('fl-stage');
+        var loaderElem = document.getElementById('first-loader');
+
+        var totalMB = 4.85;
+        var currentPct = 0;
+        var isAppReady = false;
+
+        var statusMessages = [
+          '[FETCHING CORE ENGINE BUNDLES...]',
+          '[DECODING 3D MESH GEOMETRIES & PALETTES...]',
+          '[INITIALIZING STUDIO GHIBLI TEXTURE PIPELINE...]',
+          '[COMPILING WEBGL SHADERS & SHADOW BUFFERS...]',
+          '[STARTING SIMULATION CLOCK & WORLD TILES...]'
+        ];
+
+        var interval = setInterval(function() {
+          if (currentPct < 92 || isAppReady) {
+            var step = isAppReady ? 6 : (currentPct < 40 ? 4 : (currentPct < 75 ? 2.5 : 1));
+            currentPct = Math.min(100, currentPct + step);
+            var currentMB = ((currentPct / 100) * totalMB).toFixed(2);
+
+            if (pctElem) pctElem.textContent = Math.floor(currentPct) + '%';
+            if (sizeElem) sizeElem.textContent = currentMB + ' MB / ' + totalMB.toFixed(2) + ' MB';
+            if (barElem) barElem.style.width = currentPct + '%';
+
+            var msgIdx = Math.min(statusMessages.length - 1, Math.floor((currentPct / 100) * statusMessages.length));
+            if (statusElem && !isAppReady) statusElem.textContent = statusMessages[msgIdx];
+
+            if (currentPct >= 100) {
+              clearInterval(interval);
+              if (stageElem) stageElem.textContent = '[LAUNCHING_GAME]';
+              if (statusElem) statusElem.textContent = '[INITIALIZATION COMPLETE - LAUNCHING!]';
+              setTimeout(function() {
+                if (loaderElem) {
+                  loaderElem.classList.add('fade-out');
+                  setTimeout(function() {
+                    if (loaderElem.parentNode) loaderElem.parentNode.removeChild(loaderElem);
+                  }, 450);
+                }
+              }, 200);
+            }
+          }
+        }, 35);
+
+        window.__COMPLETE_FIRST_LOAD__ = function() {
+          isAppReady = true;
+        };
+      })();
+    </script>
+
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
