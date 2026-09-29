@@ -1,6 +1,6 @@
 import React, { useRef, useCallback } from 'react';
 import { ToolType, InventoryItem, DebrisType } from '../types/game';
-import { Droplets, Sprout, Hand, Shovel, Axe, Pickaxe, Scissors, Package, Wrench } from 'lucide-react';
+import { Droplets, Sprout, Hand, Shovel, Axe, Pickaxe, Scissors, Package, Wrench, Eye, EyeOff, Zap } from 'lucide-react';
 
 interface TouchControlsProps {
   activeTool: ToolType;
@@ -17,6 +17,10 @@ interface TouchControlsProps {
   isCollectible?: boolean;
   isNearShippingBin?: boolean;
   targetedDebris?: DebrisType;
+  showGridCursor?: boolean;
+  onToggleGridCursor?: () => void;
+  isSprinting?: boolean;
+  onToggleSprint?: () => void;
 }
 
 export const TouchControls: React.FC<TouchControlsProps> = ({
@@ -34,6 +38,10 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   isCollectible = false,
   isNearShippingBin = false,
   targetedDebris,
+  showGridCursor = true,
+  onToggleGridCursor,
+  isSprinting = false,
+  onToggleSprint,
 }) => {
   const joystickRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
@@ -41,9 +49,12 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   const pointerIdRef = useRef<number | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
     isDraggingRef.current = true;
     pointerIdRef.current = e.pointerId;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (_) {}
     updateKnob(e.clientX, e.clientY);
   };
 
@@ -56,6 +67,11 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
     if (pointerIdRef.current === e.pointerId) {
       isDraggingRef.current = false;
       pointerIdRef.current = null;
+      try {
+        if (e.currentTarget && (e.currentTarget as HTMLElement).hasPointerCapture?.(e.pointerId)) {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        }
+      } catch (_) {}
       if (knobRef.current) {
         knobRef.current.style.transform = 'translate3d(0px, 0px, 0px)';
       }
@@ -98,6 +114,51 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
     } catch (_) {}
     onActionButton();
   }, [onActionButton]);
+
+  // Multi-Touch Instant Trigger Ref & Helpers (Prevents click delays & touch conflicts while holding analog)
+  const lastActionTimeRef = useRef(0);
+  const triggerActionInstant = useCallback((e?: React.PointerEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const now = Date.now();
+    if (now - lastActionTimeRef.current < 100) return;
+    lastActionTimeRef.current = now;
+    handleAction();
+  }, [handleAction]);
+
+  const lastSprintTimeRef = useRef(0);
+  const triggerSprintInstant = useCallback((e?: React.PointerEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const now = Date.now();
+    if (now - lastSprintTimeRef.current < 120) return;
+    lastSprintTimeRef.current = now;
+    if (onToggleSprint) onToggleSprint();
+  }, [onToggleSprint]);
+
+  const lastGridToggleTimeRef = useRef(0);
+  const triggerGridToggleInstant = useCallback((e?: React.PointerEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const now = Date.now();
+    if (now - lastGridToggleTimeRef.current < 120) return;
+    lastGridToggleTimeRef.current = now;
+    if (onToggleGridCursor) onToggleGridCursor();
+  }, [onToggleGridCursor]);
+
+  const lastSelectorModeTimeRef = useRef(0);
+  const triggerSelectorModeInstant = useCallback((e?: React.PointerEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const now = Date.now();
+    if (now - lastSelectorModeTimeRef.current < 120) return;
+    lastSelectorModeTimeRef.current = now;
+    onToggleSelectorMode();
+  }, [onToggleSelectorMode]);
 
   // Tools without 'panen'
   const tools: { id: ToolType; label: string; icon: React.ReactNode }[] = [
@@ -174,39 +235,10 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
 
       {/* Main Touch Controls Bottom Container */}
       <div className="flex flex-col gap-2 w-full pb-1">
-        {/* Joystick (Left), Mode Switcher near Analog, and Action Button (Right) */}
+        {/* Joystick (Left) and Action Button + Helper Toggles (Right) */}
         <div className="flex justify-between items-end px-2">
-          {/* Left Block: Analog Joystick + Mode Switcher */}
+          {/* Left Block: Analog Joystick (Clean & Uncluttered) */}
           <div className="flex flex-col items-start gap-2">
-            {/* SWITCHER DEKAT ANALOG: Beralih Antara Mode Alat dan Mode Barang */}
-            <button
-              onClick={onToggleSelectorMode}
-              className={`pointer-events-auto px-2.5 py-1 rounded-xl border flex items-center gap-1.5 shadow-lg active:scale-95 transition-all text-[10px] font-black tracking-wide ${
-                selectorMode === 'items'
-                  ? 'bg-amber-600/90 text-white border-amber-300/60 shadow-amber-500/20'
-                  : 'bg-emerald-700/85 text-white border-emerald-300/40 shadow-emerald-500/20'
-              }`}
-              title="Ganti Mode Alat / Seleksi Barang"
-            >
-              {selectorMode === 'items' ? (
-                <>
-                  <Package className="w-3.5 h-3.5 text-amber-200" />
-                  <span>MODE BARANG</span>
-                  <span className="text-[8px] bg-black/40 px-1 py-0.2 rounded-full font-mono text-amber-200">
-                    {inventory.length}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Wrench className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>MODE ALAT</span>
-                  <span className="text-[8px] bg-black/40 px-1 py-0.2 rounded-full font-mono text-emerald-200">
-                    6
-                  </span>
-                </>
-              )}
-            </button>
-
             {/* Transparent Virtual Joystick */}
             <div
               ref={joystickRef}
@@ -231,11 +263,56 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
             </div>
           </div>
 
-          {/* Right Block: Dynamic Action Button */}
-          <div className="pointer-events-auto flex flex-col items-center">
+          {/* Right Block: Dynamic Action Button + Helper Toggles */}
+          <div className="pointer-events-auto flex flex-col items-end gap-1.5">
+            {/* Quick Utility Row: Penanda Petak Toggle & Mode Lari Toggle */}
+            <div className="flex items-center gap-1.5">
+              {/* Tombol Sembunyikan/Tampilkan Penanda Petak */}
+              {onToggleGridCursor && (
+                <button
+                  onPointerDown={triggerGridToggleInstant}
+                  className={`touch-none px-2 py-1 rounded-xl border flex items-center gap-1 shadow-md active:scale-95 transition-all text-[9px] font-bold tracking-tight ${
+                    showGridCursor
+                      ? 'bg-emerald-800/85 text-emerald-200 border-emerald-400/50 shadow-emerald-900/30'
+                      : 'bg-slate-900/85 text-slate-400 border-slate-600/40'
+                  }`}
+                  title={showGridCursor ? "Sembunyikan Penanda Petak 3D" : "Tampilkan Penanda Petak 3D"}
+                >
+                  {showGridCursor ? (
+                    <>
+                      <Eye className="w-3 h-3 text-emerald-300" />
+                      <span>PETAK</span>
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="w-3 h-3 text-slate-400" />
+                      <span>SEMBUNYI</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Tombol Mode Lari / Jalan */}
+              {onToggleSprint && (
+                <button
+                  onPointerDown={triggerSprintInstant}
+                  className={`touch-none px-2.5 py-1 rounded-xl border flex items-center gap-1 shadow-md active:scale-95 transition-all text-[9.5px] font-black tracking-wide ${
+                    isSprinting
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-200 shadow-orange-500/40 ring-2 ring-amber-400/30 animate-pulse'
+                      : 'bg-black/65 text-slate-300 border-white/20 hover:text-white'
+                  }`}
+                  title="Ganti Mode Lari Cepat / Jalan Santai"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isSprinting ? 'text-yellow-200 fill-amber-200' : 'text-slate-300'}`} />
+                  <span>{isSprinting ? 'LARI ⚡' : 'JALAN'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Dynamic Main Action Button (Supports Multi-Touch simultaneously with Joystick) */}
             <button
-              onClick={handleAction}
-              className={`w-20 h-20 rounded-full text-white font-extrabold shadow-xl flex flex-col items-center justify-center gap-0.5 active:scale-90 transition-all duration-75 border-2 ${
+              onPointerDown={triggerActionInstant}
+              className={`touch-none w-20 h-20 rounded-full text-white font-extrabold shadow-xl flex flex-col items-center justify-center gap-0.5 active:scale-90 transition-all duration-75 border-2 ${
                 isCollectible
                   ? 'bg-gradient-to-t from-amber-600 to-yellow-500 border-amber-200 shadow-amber-500/50 ring-2 ring-yellow-400/40 animate-pulse'
                   : targetedDebris === 'weed'
@@ -257,79 +334,135 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
           </div>
         </div>
 
-        {/* Bottom Selector Bar (Switchable between Tools & Items with smooth horizontal swipe) */}
-        <div className="pointer-events-auto w-full bg-black/60 border border-white/15 rounded-2xl p-1 shadow-lg overflow-x-auto no-scrollbar scroll-smooth flex items-center gap-1.5 touch-pan-x">
-          {selectorMode === 'tools' ? (
-            /* Mode 1: Alat Tani */
-            tools.map((t) => {
-              const isActive = activeTool === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    setActiveTool(t.id);
-                    if (t.id === 'plant' && onOpenSeedSelect) {
-                      onOpenSeedSelect();
-                    }
-                    try {
-                      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-                        navigator.vibrate(10);
-                      }
-                    } catch (_) {}
-                  }}
-                  className={`min-w-[58px] py-1.5 px-2 rounded-xl flex flex-col items-center justify-center transition-all shrink-0 active:scale-95 ${
-                    isActive
-                      ? 'bg-emerald-600/90 text-white font-black shadow-md border border-emerald-300/50 scale-[1.03]'
-                      : 'text-slate-300 hover:text-white hover:bg-white/5 font-semibold'
-                  }`}
-                >
-                  {t.icon}
-                  <span className="text-[9px] mt-0.5 tracking-tight truncate whitespace-nowrap">
-                    {t.label}
-                  </span>
-                </button>
-              );
-            })
-          ) : (
-            /* Mode 2: Seleksi Barang */
-            inventory.length > 0 ? (
-              inventory.map((item) => {
-                const isActive = activeItem?.id === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveItem(item);
-                      try {
-                        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-                          navigator.vibrate(10);
-                        }
-                      } catch (_) {}
-                    }}
-                    className={`min-w-[64px] py-1 px-2 rounded-xl flex flex-col items-center justify-center transition-all shrink-0 active:scale-95 border ${
-                      isActive
-                        ? 'bg-amber-600/90 text-white font-black shadow-md border-amber-300 scale-[1.03]'
-                        : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span className="text-base leading-none">{item.icon}</span>
-                      <span className="text-[8px] bg-black/50 text-amber-300 px-1 rounded-full font-mono font-bold">
-                        {item.count}
-                      </span>
-                    </div>
-                    <span className="text-[8px] mt-0.5 tracking-tight truncate max-w-[58px] whitespace-nowrap">
-                      {item.name}
-                    </span>
-                  </button>
-                );
-              })
+        {/* Selected Item Info Badge floating above bottom bar */}
+        {selectorMode === 'items' && activeItem && (
+          <div className="pointer-events-none self-center mb-1 bg-black/85 border border-amber-400/50 text-amber-200 px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 text-[10px] font-bold animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <span className="text-sm leading-none drop-shadow">{activeItem.icon}</span>
+            <span>{activeItem.name}</span>
+            <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono text-[9px]">
+              x{activeItem.count}
+            </span>
+            <span className="text-[8.5px] text-slate-300 ml-1 border-l border-white/20 pl-1.5">
+              Tekan ANGKAT untuk memegang
+            </span>
+          </div>
+        )}
+
+        {/* Bottom Toolbar Container (Integrates Mode Switcher on Left + Animated Contents on Right) */}
+        <div className="pointer-events-auto w-full bg-black/75 border border-white/20 rounded-2xl p-1.5 shadow-xl flex items-center gap-2 overflow-hidden relative">
+          {/* Integrated Left Switcher Button (Stays stationary on left) */}
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onToggleSelectorMode();
+            }}
+            className={`shrink-0 touch-none px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-md active:scale-95 transition-all text-[10px] font-black tracking-wide z-10 cursor-pointer ${
+              selectorMode === 'items'
+                ? 'bg-amber-600/95 text-white border-amber-300/80 shadow-amber-500/30 ring-1 ring-amber-400/40'
+                : 'bg-emerald-700/90 text-white border-emerald-300/60 shadow-emerald-500/30 ring-1 ring-emerald-400/30'
+            }`}
+            title="Ganti Mode Alat / Mode Tas Barang"
+          >
+            {selectorMode === 'items' ? (
+              <>
+                <Package className="w-4 h-4 text-amber-200 animate-pulse" />
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-[9px] font-extrabold uppercase">TAS</span>
+                  <span className="text-[7.5px] text-amber-200 font-mono font-bold">{inventory.length} BARANG</span>
+                </div>
+              </>
             ) : (
-              <div className="w-full text-center py-1 text-[10px] text-slate-400 italic">
-                Tas kosong. Buka Pasar untuk membeli barang!
-              </div>
-            )
-          )}
+              <>
+                <Wrench className="w-4 h-4 text-emerald-200" />
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-[9px] font-extrabold uppercase">ALAT</span>
+                  <span className="text-[7.5px] text-emerald-200 font-mono font-bold">6 ALAT</span>
+                </div>
+              </>
+            )}
+          </button>
+
+          {/* Vertical Separator */}
+          <div className="w-[1px] h-8 bg-white/25 shrink-0" />
+
+          {/* Animated Scrollable Items Container (Fully Swipeable / Scrollable horizontally on touch) */}
+          <div className="flex-1 overflow-x-auto no-scrollbar scroll-smooth flex items-center gap-1.5 touch-pan-x min-h-[46px]">
+            <div key={selectorMode} className="animate-switch-slide flex items-center gap-1.5 shrink-0">
+              {selectorMode === 'tools' ? (
+                /* Mode 1: Alat Tani */
+                tools.map((t) => {
+                  const isActive = activeTool === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTool(t.id);
+                        if (t.id === 'plant' && onOpenSeedSelect) {
+                          onOpenSeedSelect();
+                        }
+                        try {
+                          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                            navigator.vibrate(10);
+                          }
+                        } catch (_) {}
+                      }}
+                      className={`min-w-[58px] py-1.5 px-2 rounded-xl flex flex-col items-center justify-center transition-all shrink-0 active:scale-95 touch-pan-x cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-600/90 text-white font-black shadow-md border border-emerald-300/50 scale-[1.03]'
+                          : 'text-slate-300 hover:text-white hover:bg-white/5 font-semibold'
+                      }`}
+                    >
+                      {t.icon}
+                      <span className="text-[9px] mt-0.5 tracking-tight truncate whitespace-nowrap">
+                        {t.label}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                /* Mode 2: Seleksi Barang (Geser Kiri/Kanan dengan Usapan Jari) */
+                inventory.length > 0 ? (
+                  inventory.map((item) => {
+                    const isActive = activeItem?.id === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveItem(item);
+                          try {
+                            if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                              navigator.vibrate(10);
+                            }
+                          } catch (_) {}
+                        }}
+                        className={`min-w-[68px] py-1 px-2.5 rounded-xl flex flex-col items-center justify-center transition-all shrink-0 active:scale-95 border touch-pan-x cursor-pointer ${
+                          isActive
+                            ? 'bg-amber-600/90 text-white font-black shadow-md border-amber-300 scale-[1.03] ring-1 ring-amber-200/50'
+                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className="text-base leading-none drop-shadow">{item.icon}</span>
+                          <span className="text-[8px] bg-black/50 text-amber-300 px-1 rounded-full font-mono font-bold">
+                            {item.count}
+                          </span>
+                        </div>
+                        <span className="text-[8px] mt-0.5 tracking-tight truncate max-w-[60px] whitespace-nowrap font-medium">
+                          {item.name}
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="w-full text-center py-1 text-[10px] text-slate-400 italic px-4">
+                    Tas kosong. Buka Pasar untuk membeli barang!
+                  </div>
+                )
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

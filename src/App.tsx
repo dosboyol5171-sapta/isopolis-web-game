@@ -76,6 +76,7 @@ export default function App() {
   ]);
 
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(() => inventory[0] || null);
+  const [heldItem, setHeldItem] = useState<InventoryItem | null>(null);
 
   // Kotak Pengiriman (Shipping Bin) State
   const [shippingBin, setShippingBin] = useState<InventoryItem[]>([]);
@@ -140,6 +141,8 @@ export default function App() {
   });
 
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showGridCursor, setShowGridCursor] = useState(true);
+  const [isSprinting, setIsSprinting] = useState(false);
   const [telemetry, setTelemetry] = useState({
     fps: 24,
     targetFps: 24,
@@ -170,6 +173,29 @@ export default function App() {
       setToastMsg((curr) => (curr === msg ? null : curr));
     }, 2500);
   };
+
+  const handleToggleGridCursor = useCallback(() => {
+    setShowGridCursor((prev) => {
+      const next = !prev;
+      if (sceneRef.current) {
+        sceneRef.current.setGridCursorHidden(!next);
+      }
+      showToast(next ? '👁️ Penanda Petak 3D: DITAMPILKAN' : '🙈 Penanda Petak 3D: DISEMBUNYIKAN');
+      return next;
+    });
+  }, []);
+
+  const handleToggleSprint = useCallback(() => {
+    setIsSprinting((prev) => {
+      const next = !prev;
+      if (sceneRef.current) {
+        sceneRef.current.setSprinting(next);
+      }
+      soundEngine.playCoin();
+      showToast(next ? '⚡ MODE LARI: AKTIF (Kecepatan Cepat)' : '🚶 MODE JALAN: Normal');
+      return next;
+    });
+  }, []);
 
   const handleTravelToRef = useRef<(target: MapLocation, spawn?: { x: number; z: number }) => void>(() => {});
 
@@ -392,6 +418,34 @@ export default function App() {
       // 0. Auto-Collect if mature crop present
       if (currentTile.crop && currentTile.crop.stage === 3) {
         handleCollect(gx, gz);
+        return;
+      }
+
+      // 0.1 ITEM MODE: Hold Item Overhead or Ship to Shipping Bin
+      if (selectorMode === 'items' && activeItem) {
+        if (isNearShippingBin) {
+          soundEngine.playCoin();
+          confetti({ particleCount: 35, spread: 55, origin: { y: 0.7 } });
+          const itemPrice = activeItem.sellPrice || 10;
+          setPlayer((p) => ({ ...p, coins: p.coins + itemPrice }));
+
+          setInventory((prev) =>
+            prev.map((i) => (i.id === activeItem.id ? { ...i, count: i.count - 1 } : i)).filter((i) => i.count > 0)
+          );
+
+          setHeldItem(null);
+          showToast(`📦 Mengirim 1x ${activeItem.name} ke Kotak Pengiriman! (+${itemPrice} Koin)`);
+          return;
+        }
+
+        if (heldItem?.id === activeItem.id) {
+          setHeldItem(null);
+          showToast(`📥 Menyimpan ${activeItem.name} kembali ke dalam tas.`);
+        } else {
+          setHeldItem(activeItem);
+          soundEngine.playCoin();
+          showToast(`✨ Karakter mengangkat ${activeItem.icon} ${activeItem.name} di atas kepala!`);
+        }
         return;
       }
 
@@ -883,6 +937,13 @@ export default function App() {
     };
   }, []); // Run ONCE on mount, NEVER recreate GameScene!
 
+  // Sync 3D Held Item Overhead (Karakter Mengangkat Barang di Atas Kepala)
+  useEffect(() => {
+    if (sceneRef.current) {
+      sceneRef.current.setPlayerHeldItem(heldItem);
+    }
+  }, [heldItem]);
+
   // Sync 3D Scene Tiles & Animals
   useEffect(() => {
     if (sceneRef.current) {
@@ -898,7 +959,7 @@ export default function App() {
     }
   }, [settings]);
 
-  // Synchronize 3D Cursor (1x1 vs 3x3 with ready soil detection)
+  // Synchronize 3D Cursor (1x1 vs 3x3 with ready soil detection & dynamic theme colors)
   useEffect(() => {
     if (!sceneRef.current) return;
     const isPlanting = activeTool === 'plant' || (selectorMode === 'items' && activeItem?.category === 'seed');
@@ -916,11 +977,12 @@ export default function App() {
           }
         }
       }
-      sceneRef.current.setCursorMode('3x3', readyCount > 0);
+      sceneRef.current.setCursorMode('3x3', readyCount > 0, 'plant');
     } else {
-      sceneRef.current.setCursorMode('single');
+      const actionType = activeTool === 'water' ? 'water' : isCollectible ? 'harvest' : targetedDebris ? 'debris' : 'default';
+      sceneRef.current.setCursorMode('single', true, actionType);
     }
-  }, [activeTool, selectorMode, activeItem, playerPos, activeTiles, gridWidth, gridHeight]);
+  }, [activeTool, selectorMode, activeItem, playerPos, activeTiles, gridWidth, gridHeight, isCollectible, targetedDebris]);
 
   // Daily 17:30 (5:30 PM) Shipping Bin Payout Handler (+40% Premium Profit)
   const triggerShippingPayout = useCallback(() => {
@@ -1221,7 +1283,7 @@ export default function App() {
       return selectorMode === 'items' && activeItem ? 'Kirim' : 'Kotak';
     }
     if (selectorMode === 'items' && activeItem) {
-      return 'Gunakan';
+      return heldItem?.id === activeItem.id ? 'Simpan' : 'Angkat';
     }
     switch (activeTool) {
       case 'hoe':
@@ -1301,6 +1363,10 @@ export default function App() {
         isCollectible={isCollectible}
         isNearShippingBin={isNearShippingBin}
         targetedDebris={targetedDebris}
+        showGridCursor={showGridCursor}
+        onToggleGridCursor={handleToggleGridCursor}
+        isSprinting={isSprinting}
+        onToggleSprint={handleToggleSprint}
       />
 
       {/* DYNAMIC SCREEN DIMMING & MAP PRE-LOADING OVERLAY ("meredup lalu tampil memuat selesai memuat menerang ke normal") */}

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TileState, PlacedAnimal, PerformanceSettings, TexturePackPalette, MapLocation } from '../../types/game';
+import { TileState, PlacedAnimal, PerformanceSettings, TexturePackPalette, MapLocation, InventoryItem, CropType } from '../../types/game';
 import { ModelFactory } from './BuildingModels';
 import { MemoryHeapManager } from '../MemoryHeapManager';
 import { ShaderPipelinePreheater } from './ShaderPipelinePreheater';
@@ -961,7 +961,7 @@ export function calculateTileElevation(
     return -0.06;
   }
   if (tileType === 'soil') {
-    return -0.015; // Natural slight furrow depression
+    return 0.018; // Elevated slightly above meadow base ground (Y = 0) so hoed soil tiles are 100% visible!
   }
   if (tileType === 'path') {
     return 0.012; // Natural 3D stepping stone lift
@@ -1007,10 +1007,20 @@ export class GameScene {
   private cropMeshMap = new Map<string, THREE.Group>();
   private debrisMeshMap = new Map<string, THREE.Group>();
   private animalGroup: THREE.Group;
-  private tileCursor: THREE.Mesh;
+  private tileCursorGroup!: THREE.Group;
+  private cursorFillMat!: THREE.MeshBasicMaterial;
+  private cursorBorderMat!: THREE.LineBasicMaterial;
+  private cursorCornerMat!: THREE.LineBasicMaterial;
+  private tileCursor: THREE.Group;
   private tileCursor3x3: THREE.Group;
   private cursor3x3Mat: THREE.LineBasicMaterial;
   private playerMesh: THREE.Group;
+  private heldItemGroup: THREE.Group | null = null;
+  private currentHeldItem: InventoryItem | null = null;
+
+  public isGridCursorHidden = false;
+  public isSprinting = false;
+  private dustPool: { mesh: THREE.Mesh; life: number; maxLife: number; vx: number; vy: number; vz: number }[] = [];
 
   private settings: PerformanceSettings;
   private inputVector = { x: 0, z: 0 };
@@ -1143,12 +1153,57 @@ export class GameScene {
     this.animalGroup = new THREE.Group();
     this.scene.add(this.animalGroup);
 
-    // 8. Single Tile Cursor
-    const cursorGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(this.tileSize * 0.98, 0.22, this.tileSize * 0.98));
-    const cursorMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-    this.tileCursor = new THREE.Mesh(cursorGeo, cursorMat);
-    this.tileCursor.position.y = 0.12;
-    this.scene.add(this.tileCursor);
+    // 8. Elegant & Aesthetic Ground-Flat Tile Cursor (Penanda Petak Low-Poly Flat Super Clean)
+    this.tileCursorGroup = new THREE.Group();
+
+    // A. Soft Glowing Soil Fill Mesh (Plane lying flat on ground)
+    const fillGeo = new THREE.PlaneGeometry(this.tileSize * 0.94, this.tileSize * 0.94);
+    fillGeo.rotateX(-Math.PI / 2);
+    this.cursorFillMat = new THREE.MeshBasicMaterial({
+      color: 0x22c55e,
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const cursorFillMesh = new THREE.Mesh(fillGeo, this.cursorFillMat);
+    cursorFillMesh.position.y = 0.028;
+    this.tileCursorGroup.add(cursorFillMesh);
+
+    // B. Clean Flat 2D Perimeter Line Loop (Lies flat on tile surface at Y = 0.035, NO vertical 3D box wires!)
+    const halfS = (this.tileSize * 0.96) / 2;
+    const borderPoints = [
+      new THREE.Vector3(-halfS, 0.035, -halfS),
+      new THREE.Vector3(halfS, 0.035, -halfS),
+      new THREE.Vector3(halfS, 0.035, halfS),
+      new THREE.Vector3(-halfS, 0.035, halfS),
+      new THREE.Vector3(-halfS, 0.035, -halfS),
+    ];
+    const borderGeo = new THREE.BufferGeometry().setFromPoints(borderPoints);
+    this.cursorBorderMat = new THREE.LineBasicMaterial({ color: 0x86efac, linewidth: 2, transparent: true, opacity: 0.85 });
+    const cursorBorderMesh = new THREE.Line(borderGeo, this.cursorBorderMat);
+    this.tileCursorGroup.add(cursorBorderMesh);
+
+    // C. 4 Flat Corner Reticle Accents (Subtle gold brackets flat on tile corners at Y = 0.040)
+    const bracketPoints: number[] = [];
+    const bLen = this.tileSize * 0.20;
+    // Top-Left
+    bracketPoints.push(-halfS, 0.040, -halfS + bLen, -halfS, 0.040, -halfS, -halfS + bLen, 0.040, -halfS);
+    // Top-Right
+    bracketPoints.push(halfS - bLen, 0.040, -halfS, halfS, 0.040, -halfS, halfS, 0.040, -halfS + bLen);
+    // Bottom-Right
+    bracketPoints.push(halfS, 0.040, halfS - bLen, halfS, 0.040, halfS, halfS - bLen, 0.040, halfS);
+    // Bottom-Left
+    bracketPoints.push(-halfS + bLen, 0.040, halfS, -halfS, 0.040, halfS, -halfS, 0.040, halfS - bLen);
+
+    const bracketGeo = new THREE.BufferGeometry();
+    bracketGeo.setAttribute('position', new THREE.Float32BufferAttribute(bracketPoints, 3));
+    this.cursorCornerMat = new THREE.LineBasicMaterial({ color: 0xfde047, linewidth: 3, transparent: true, opacity: 0.95 });
+    const bracketMesh = new THREE.LineSegments(bracketGeo, this.cursorCornerMat);
+    this.tileCursorGroup.add(bracketMesh);
+
+    this.tileCursor = this.tileCursorGroup;
+    this.scene.add(this.tileCursorGroup);
 
     // 9. Smart 3x3 Sowing Grid Indicator
     this.tileCursor3x3 = new THREE.Group();
@@ -2555,6 +2610,88 @@ export class GameScene {
     return dist < 2.5;
   }
 
+  // Display Item Held Overhead (Mengangkat Barang Keluar dari Tas di Atas Kepala Karakter)
+  public setPlayerHeldItem(item: { id: string; name: string; icon: string; cropType?: CropType } | null) {
+    if (this.heldItemGroup) {
+      this.playerMesh.remove(this.heldItemGroup);
+      this.heldItemGroup.traverse((child) => {
+        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+        if ((child as THREE.Mesh).material) {
+          const mat = (child as THREE.Mesh).material;
+          if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+          else mat.dispose();
+        }
+      });
+      this.heldItemGroup = null;
+    }
+
+    if (!item) return;
+
+    const heldGroup = new THREE.Group();
+    heldGroup.name = 'held_item';
+
+    // 1. Soft glowing golden halo ring beneath the held item
+    const haloGeo = new THREE.RingGeometry(0.18, 0.28, 16);
+    haloGeo.rotateX(-Math.PI / 2);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0xfacc15,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide,
+    });
+    const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+    haloMesh.position.y = -0.05;
+    heldGroup.add(haloMesh);
+
+    // 2. 3D Crop / Material Model or Crisp Emoji Billboard
+    if (item.cropType) {
+      const cropProp = ModelFactory.createCrop(item.cropType, 3, this.activePalette);
+      cropProp.scale.set(1.2, 1.2, 1.2);
+      heldGroup.add(cropProp);
+    } else if (item.id === 'res_wood') {
+      const woodProp = ModelFactory.createDebris('log', this.activePalette);
+      woodProp.scale.set(0.85, 0.85, 0.85);
+      heldGroup.add(woodProp);
+    } else if (item.id === 'res_stone') {
+      const stoneProp = ModelFactory.createDebris('small_stone', this.activePalette);
+      stoneProp.scale.set(1.1, 1.1, 1.1);
+      heldGroup.add(stoneProp);
+    } else {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d')!;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.95)';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.roundRect(16, 16, 224, 224, 36);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.font = '110px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.icon, 128, 128);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const spriteMat = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,
+      });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(0.65, 0.65, 0.65);
+      heldGroup.add(sprite);
+    }
+
+    heldGroup.position.set(0, 1.25, 0);
+    this.heldItemGroup = heldGroup;
+    this.playerMesh.add(heldGroup);
+  }
+
   // Animals
   public updateAnimals(animals: PlacedAnimal[]) {
     while (this.animalGroup.children.length > 0) {
@@ -2634,8 +2771,28 @@ export class GameScene {
     this.inputVector.z = z;
   }
 
+  // Toggle Grid Cursor Visibility (Sembunyikan Penanda Petak)
+  public setGridCursorHidden(hidden: boolean) {
+    this.isGridCursorHidden = hidden;
+    if (hidden) {
+      if (this.tileCursor) this.tileCursor.visible = false;
+      if (this.tileCursor3x3) this.tileCursor3x3.visible = false;
+    }
+  }
+
+  // Toggle Sprint Mode (Mode Lari Cepat)
+  public setSprinting(sprinting: boolean) {
+    this.isSprinting = sprinting;
+  }
+
   // Switch between 1x1 cursor and 3x3 planting grid indicator with smart ready-soil color
-  public setCursorMode(mode: 'single' | '3x3', hasReadyTiles: boolean = true) {
+  public setCursorMode(mode: 'single' | '3x3', hasReadyTiles: boolean = true, actionType: string = 'default') {
+    if (this.isGridCursorHidden) {
+      if (this.tileCursor) this.tileCursor.visible = false;
+      if (this.tileCursor3x3) this.tileCursor3x3.visible = false;
+      return;
+    }
+
     if (mode === '3x3') {
       this.tileCursor.visible = false;
       this.tileCursor3x3.visible = true;
@@ -2643,6 +2800,21 @@ export class GameScene {
     } else {
       this.tileCursor.visible = true;
       this.tileCursor3x3.visible = false;
+
+      // Dynamic theme color according to action type
+      if (actionType === 'water') {
+        this.cursorFillMat.color.setHex(0x0284c7);
+        this.cursorBorderMat.color.setHex(0x38bdf8);
+      } else if (actionType === 'harvest' || actionType === 'collect') {
+        this.cursorFillMat.color.setHex(0xd97706);
+        this.cursorBorderMat.color.setHex(0xfacc15);
+      } else if (actionType === 'debris') {
+        this.cursorFillMat.color.setHex(0x92400e);
+        this.cursorBorderMat.color.setHex(0xf59e0b);
+      } else {
+        this.cursorFillMat.color.setHex(hasReadyTiles ? 0x22c55e : 0x10b981);
+        this.cursorBorderMat.color.setHex(0x86efac);
+      }
     }
   }
 
@@ -2750,7 +2922,7 @@ export class GameScene {
       isWalking = true;
 
       const angle = Math.atan2(this.inputVector.z, this.inputVector.x) - Math.PI / 4;
-      const speed = 4.8;
+      const speed = this.isSprinting ? 8.2 : 4.8;
       const moveDist = speed * Math.min(1.0, inputLen) * delta;
 
       const targetFacing = -angle + Math.PI / 2;
@@ -2832,23 +3004,48 @@ export class GameScene {
     this.playerMesh.position.y = THREE.MathUtils.lerp(this.playerMesh.position.y, basePlayerY, 0.2);
 
     if (isWalking) {
-      this.walkAnimTime += delta * 12;
+      this.walkAnimTime += delta * (this.isSprinting ? 22 : 12);
       // Gentle subtle natural body sway (rotation only, does not jitter camera position)
-      this.playerMesh.rotation.z = Math.sin(this.walkAnimTime) * 0.035;
+      this.playerMesh.rotation.z = Math.sin(this.walkAnimTime) * (this.isSprinting ? 0.060 : 0.035);
+
+      // Spawn lively dust trail particles when sprinting
+      if (this.isSprinting && Math.random() > 0.35) {
+        this.spawnDustPuff(this.playerMesh.position.x, basePlayerY, this.playerMesh.position.z);
+      }
     } else {
       this.playerMesh.rotation.z = THREE.MathUtils.lerp(this.playerMesh.rotation.z, 0, 0.2);
     }
 
-    // Update Tile Cursor Position (Single & 3x3)
-    const curPos = this.getPlayerGridPos();
-    const cursorX = curPos.x * this.tileSize - halfW + this.tileSize / 2;
-    const cursorZ = curPos.z * this.tileSize - halfH + this.tileSize / 2;
-    this.tileCursor.position.x = cursorX;
-    this.tileCursor.position.y = standElevY + 0.12;
-    this.tileCursor.position.z = cursorZ;
-    this.tileCursor3x3.position.x = cursorX;
-    this.tileCursor3x3.position.y = standElevY + 0.12;
-    this.tileCursor3x3.position.z = cursorZ;
+    // Animate Held Item Above Player Head (Harvest Moon / Stardew style overhead carrying)
+    if (this.heldItemGroup) {
+      this.heldItemGroup.position.y = 1.25 + Math.sin(now * 0.005) * 0.04;
+      this.heldItemGroup.rotation.y += delta * 1.5;
+    }
+
+    this.updateDustParticles(delta);
+
+    // Update Tile Cursor Position & Pulsing Animation
+    if (!this.isGridCursorHidden) {
+      const curPos = this.getPlayerGridPos();
+      const cursorX = curPos.x * this.tileSize - halfW + this.tileSize / 2;
+      const cursorZ = curPos.z * this.tileSize - halfH + this.tileSize / 2;
+      const hoverPulse = Math.sin(now * 0.005) * 0.02 + 0.03;
+
+      this.tileCursor.position.x = cursorX;
+      this.tileCursor.position.y = standElevY + hoverPulse;
+      this.tileCursor.position.z = cursorZ;
+
+      this.tileCursor3x3.position.x = cursorX;
+      this.tileCursor3x3.position.y = standElevY + hoverPulse;
+      this.tileCursor3x3.position.z = cursorZ;
+
+      if (this.cursorFillMat) {
+        this.cursorFillMat.opacity = 0.30 + Math.sin(now * 0.006) * 0.10;
+      }
+    } else {
+      this.tileCursor.visible = false;
+      this.tileCursor3x3.visible = false;
+    }
 
     // Smooth 3D Perspective Camera Tracking & Auto-Tilt near Gates
     const targetPlayerPos = this.playerMesh.position;
@@ -2933,6 +3130,47 @@ export class GameScene {
       console.error('GameScene 3D animation loop error:', err);
     }
   };
+
+  private spawnDustPuff(px: number, py: number, pz: number) {
+    if (this.dustPool.length > 18) return;
+    const dustGeo = new THREE.SphereGeometry(0.10 + Math.random() * 0.08, 6, 6);
+    const dustMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.65,
+    });
+    const mesh = new THREE.Mesh(dustGeo, dustMat);
+    mesh.position.set(px + (Math.random() - 0.5) * 0.22, py + 0.03, pz + (Math.random() - 0.5) * 0.22);
+    this.scene.add(mesh);
+    this.dustPool.push({
+      mesh,
+      life: 0,
+      maxLife: 0.30,
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: 0.5 + Math.random() * 0.3,
+      vz: (Math.random() - 0.5) * 0.6,
+    });
+  }
+
+  private updateDustParticles(delta: number) {
+    for (let i = this.dustPool.length - 1; i >= 0; i--) {
+      const p = this.dustPool[i];
+      p.life += delta;
+      if (p.life >= p.maxLife) {
+        this.scene.remove(p.mesh);
+        p.mesh.geometry.dispose();
+        (p.mesh.material as THREE.Material).dispose();
+        this.dustPool.splice(i, 1);
+      } else {
+        const progress = p.life / p.maxLife;
+        p.mesh.position.x += p.vx * delta;
+        p.mesh.position.y += p.vy * delta;
+        p.mesh.position.z += p.vz * delta;
+        p.mesh.scale.setScalar(1.0 + progress * 1.6);
+        (p.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - progress) * 0.65;
+      }
+    }
+  }
 
   /**
    * Captures a pristine, 100% clean full HD screenshot of the 3D world
