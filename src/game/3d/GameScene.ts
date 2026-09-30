@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { TileState, PlacedAnimal, PerformanceSettings, TexturePackPalette, MapLocation, InventoryItem, CropType } from '../../types/game';
-import { ModelFactory } from './BuildingModels';
+import { ModelFactory, getSoftShadowMaterial } from './BuildingModels';
 import { MemoryHeapManager } from '../MemoryHeapManager';
 import { ShaderPipelinePreheater } from './ShaderPipelinePreheater';
 import { WorldRegistry } from '../WorldRegistry';
+import { soundEngine } from '../SoundEngine';
 
 import grassTexUrl from '../../assets/images/botw_meadow_texture_1790669910957.jpg';
 import soilTexUrl from '../../assets/images/botw_soil_texture_1790669097811.jpg';
@@ -1173,6 +1174,7 @@ export class GameScene {
   private treeOakLeafInstanced!: THREE.InstancedMesh;
   private treeBirchLeafInstanced!: THREE.InstancedMesh;
   private treeBlossomLeafInstanced!: THREE.InstancedMesh;
+  private treeShadowInstanced?: THREE.InstancedMesh;
   private outerRoadInstancedMesh!: THREE.InstancedMesh;
   private gateVistaGroup: THREE.Group;
   private cropMeshMap = new Map<string, THREE.Group>();
@@ -1195,6 +1197,44 @@ export class GameScene {
   private static readonly dustGeo = new THREE.SphereGeometry(0.11, 4, 4);
   private static readonly dustMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.65 });
 
+  // Active tiles reference for surface detection (water, grass, path)
+  private activeTiles: Map<string, TileState> = new Map();
+
+  // Dynamic Locomotion Physics & Momentum
+  private currentSpeed = 0;
+  private playerLeanAngle = 0;
+  private playerPitchAngle = 0;
+
+  // Hop / Jump System with Squash & Stretch
+  private playerJumpY = 0;
+  private playerJumpVy = 0;
+  public isJumping = false;
+  private jumpSquashScale = 1.0;
+  private playerShadowMesh!: THREE.Mesh;
+
+  // Footstep Cadence
+  private footstepTimer = 0;
+  private isLeftFoot = false;
+
+  // Water Splash Ripple Pool (Zero-Allocation)
+  private splashPool: { mesh: THREE.Mesh; life: number; maxLife: number; active: boolean }[] = [];
+  private static readonly splashGeo = new THREE.RingGeometry(0.08, 0.25, 16);
+  private static readonly splashMat = new THREE.MeshBasicMaterial({
+    color: 0x93c5fd,
+    transparent: true,
+    opacity: 0.70,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+
+  // Living World Illusions: Bioluminescent Fireflies at Night
+  private fireflies: { mesh: THREE.Mesh; basePos: THREE.Vector3; speed: number; phase: number; radius: number }[] = [];
+  private fireflyGroup: THREE.Group = new THREE.Group();
+
+  // Living World Illusions: Drifting Wind Blossom & Leaf Petals
+  private breezePetals: { mesh: THREE.Mesh; vx: number; vy: number; vz: number; rotSpeed: number }[] = [];
+  private petalGroup: THREE.Group = new THREE.Group();
+
   private settings: PerformanceSettings;
   private inputVector = { x: 0, z: 0 };
   private targetTilePos: THREE.Vector3 | null = null;
@@ -1210,11 +1250,17 @@ export class GameScene {
   public gridHeight = 28;
   public tileSize = 1.2;
 
-  // Performance tracking & 24 FPS limiter
-  public currentFps = 24;
+  // Performance tracking & Adaptive Dynamic Resolution Scaling (DRS)
+  public currentFps = 60;
   private frameCount = 0;
   private lastFpsUpdate = 0;
   private lastFrameTimestamp = 0;
+  private currentAdaptivePixelRatio = 1.0;
+  private minAdaptivePixelRatio = 0.75;
+  private maxAdaptivePixelRatio = 1.15;
+  private lowFpsCounterMs = 0;
+  private highFpsCounterMs = 0;
+  private lastDrsCheckTime = 0;
 
   // Shared ground geometry and material
   private tileGeometry: THREE.BufferGeometry;
@@ -1285,7 +1331,7 @@ export class GameScene {
       powerPreference: 'high-performance',
     });
     this.renderer.setSize(width, height);
-    const maxPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    const maxPR = Math.min(window.devicePixelRatio || 1, 1.35);
     this.renderer.setPixelRatio(maxPR);
     this.renderer.shadowMap.enabled = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1352,52 +1398,63 @@ export class GameScene {
       });
     }
 
-    // 8. Elegant & Aesthetic Ground-Flat Tile Cursor (Penanda Petak Low-Poly Flat Super Clean)
+    // 8. Elegant & Aesthetic Ground-Flat Tile Cursor (Penanda Petak Natural Soft Ground Blend)
     this.tileCursorGroup = new THREE.Group();
 
-    // A. Soft Glowing Soil Fill Mesh (Plane lying flat on ground)
-    const fillGeo = new THREE.PlaneGeometry(this.tileSize * 0.94, this.tileSize * 0.94);
+    // A. Soft Glowing Soil Fill Mesh with Feathered Projection Texture
+    const fillCanvas = document.createElement('canvas');
+    fillCanvas.width = 128;
+    fillCanvas.height = 128;
+    const fillCtx = fillCanvas.getContext('2d')!;
+    const fillGrad = fillCtx.createRadialGradient(64, 64, 18, 64, 64, 60);
+    fillGrad.addColorStop(0, 'rgba(255, 255, 255, 0.50)');
+    fillGrad.addColorStop(0.58, 'rgba(255, 255, 255, 0.22)');
+    fillGrad.addColorStop(0.85, 'rgba(255, 255, 255, 0.06)');
+    fillGrad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+    fillCtx.fillStyle = fillGrad;
+    fillCtx.fillRect(0, 0, 128, 128);
+    const fillTex = new THREE.CanvasTexture(fillCanvas);
+    fillTex.colorSpace = THREE.SRGBColorSpace;
+
+    const fillGeo = new THREE.PlaneGeometry(this.tileSize * 0.96, this.tileSize * 0.96);
     fillGeo.rotateX(-Math.PI / 2);
     this.cursorFillMat = new THREE.MeshBasicMaterial({
+      map: fillTex,
       color: 0x22c55e,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.38,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
     const cursorFillMesh = new THREE.Mesh(fillGeo, this.cursorFillMat);
-    cursorFillMesh.position.y = 0.028;
+    cursorFillMesh.position.y = 0.026;
     this.tileCursorGroup.add(cursorFillMesh);
 
-    // B. Clean Flat 2D Perimeter Line Loop (Lies flat on tile surface at Y = 0.035, NO vertical 3D box wires!)
-    const halfS = (this.tileSize * 0.96) / 2;
+    // B. Clean Flat 2D Perimeter Line Loop with softer, natural opacity
+    const halfS = (this.tileSize * 0.92) / 2;
     const borderPoints = [
-      new THREE.Vector3(-halfS, 0.035, -halfS),
-      new THREE.Vector3(halfS, 0.035, -halfS),
-      new THREE.Vector3(halfS, 0.035, halfS),
-      new THREE.Vector3(-halfS, 0.035, halfS),
-      new THREE.Vector3(-halfS, 0.035, -halfS),
+      new THREE.Vector3(-halfS, 0.032, -halfS),
+      new THREE.Vector3(halfS, 0.032, -halfS),
+      new THREE.Vector3(halfS, 0.032, halfS),
+      new THREE.Vector3(-halfS, 0.032, halfS),
+      new THREE.Vector3(-halfS, 0.032, -halfS),
     ];
     const borderGeo = new THREE.BufferGeometry().setFromPoints(borderPoints);
-    this.cursorBorderMat = new THREE.LineBasicMaterial({ color: 0x86efac, linewidth: 2, transparent: true, opacity: 0.85 });
+    this.cursorBorderMat = new THREE.LineBasicMaterial({ color: 0x86efac, linewidth: 1.5, transparent: true, opacity: 0.60 });
     const cursorBorderMesh = new THREE.Line(borderGeo, this.cursorBorderMat);
     this.tileCursorGroup.add(cursorBorderMesh);
 
-    // C. 4 Flat Corner Reticle Accents (Subtle gold brackets flat on tile corners at Y = 0.040)
+    // C. 4 Flat Corner Reticle Accents with softer opacity
     const bracketPoints: number[] = [];
-    const bLen = this.tileSize * 0.20;
-    // Top-Left
-    bracketPoints.push(-halfS, 0.040, -halfS + bLen, -halfS, 0.040, -halfS, -halfS + bLen, 0.040, -halfS);
-    // Top-Right
-    bracketPoints.push(halfS - bLen, 0.040, -halfS, halfS, 0.040, -halfS, halfS, 0.040, -halfS + bLen);
-    // Bottom-Right
-    bracketPoints.push(halfS, 0.040, halfS - bLen, halfS, 0.040, halfS, halfS - bLen, 0.040, halfS);
-    // Bottom-Left
-    bracketPoints.push(-halfS + bLen, 0.040, halfS, -halfS, 0.040, halfS, -halfS, 0.040, halfS - bLen);
+    const bLen = this.tileSize * 0.16;
+    bracketPoints.push(-halfS, 0.034, -halfS + bLen, -halfS, 0.034, -halfS, -halfS + bLen, 0.034, -halfS);
+    bracketPoints.push(halfS - bLen, 0.034, -halfS, halfS, 0.034, -halfS, halfS, 0.034, -halfS + bLen);
+    bracketPoints.push(halfS, 0.034, halfS - bLen, halfS, 0.034, halfS, halfS - bLen, 0.034, halfS);
+    bracketPoints.push(-halfS + bLen, 0.034, halfS, -halfS, 0.034, halfS, -halfS, 0.034, halfS - bLen);
 
     const bracketGeo = new THREE.BufferGeometry();
     bracketGeo.setAttribute('position', new THREE.Float32BufferAttribute(bracketPoints, 3));
-    this.cursorCornerMat = new THREE.LineBasicMaterial({ color: 0xfde047, linewidth: 3, transparent: true, opacity: 0.95 });
+    this.cursorCornerMat = new THREE.LineBasicMaterial({ color: 0xfde047, linewidth: 2, transparent: true, opacity: 0.65 });
     const bracketMesh = new THREE.LineSegments(bracketGeo, this.cursorCornerMat);
     this.tileCursorGroup.add(bracketMesh);
 
@@ -1440,6 +1497,38 @@ export class GameScene {
     this.playerMesh.position.set(initX, 0.2, initZ);
     this.scene.add(this.playerMesh);
 
+    // Ground Contact Shadow Mesh (Dynamic Low-Poly Contact Shadow for Jump & Depth Illusion)
+    const shadowGeo = new THREE.CircleGeometry(0.38, 16);
+    shadowGeo.rotateX(-Math.PI / 2);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x051a0d,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false,
+    });
+    this.playerShadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+    this.playerShadowMesh.position.set(initX, 0.03, initZ);
+    this.scene.add(this.playerShadowMesh);
+
+    // Pre-allocate zero-allocation water splash rings
+    for (let i = 0; i < 12; i++) {
+      const sMesh = new THREE.Mesh(GameScene.splashGeo, GameScene.splashMat.clone());
+      sMesh.rotateX(-Math.PI / 2);
+      sMesh.visible = false;
+      this.scene.add(sMesh);
+      this.splashPool.push({
+        mesh: sMesh,
+        life: 0,
+        maxLife: 0.45,
+        active: false,
+      });
+    }
+
+    // Atmospheric Living World Groups (Fireflies & Wind Breeze Petals)
+    this.scene.add(this.fireflyGroup);
+    this.scene.add(this.petalGroup);
+    this.setupAtmosphericVisuals();
+
     // Setup Environment
     this.setupGroundGrid();
     this.setupStaticBuildings();
@@ -1463,6 +1552,12 @@ export class GameScene {
       this.scene.remove(this.meadowMesh);
       this.meadowMesh.geometry.dispose();
       (this.meadowMesh.material as THREE.Material).dispose();
+      this.meadowMesh = undefined as any;
+    }
+
+    // Inside the house interior, no outdoor meadow needed
+    if (this.currentLocation === 'house_interior') {
+      return;
     }
 
     // Optimized 64x64 vertex grid over 380 meters for smooth Ghibli rolling landscape color variations
@@ -1654,6 +1749,16 @@ export class GameScene {
     }
 
     const totalTiles = this.gridWidth * this.gridHeight;
+
+    // Inside the house, create ONLY the single cozy interior floor mesh (cuts 18 draw calls!)
+    if (this.currentLocation === 'house_interior') {
+      this.groundInstancedMesh = new THREE.InstancedMesh(this.tileGeometry, pathMat, totalTiles);
+      this.groundInstancedMesh.frustumCulled = false;
+      this.groundInstancedMesh.receiveShadow = false;
+      this.scene.add(this.groundInstancedMesh);
+      return;
+    }
+
     this.groundInstancedMesh = new THREE.InstancedMesh(this.tileGeometry, new THREE.MeshBasicMaterial({ visible: false }), totalTiles);
     this.groundInstancedMesh.frustumCulled = false;
 
@@ -1955,6 +2060,10 @@ export class GameScene {
       this.scene.remove(this.treeBlossomLeafInstanced);
       this.treeBlossomLeafInstanced.dispose();
     }
+    if (this.treeShadowInstanced) {
+      this.scene.remove(this.treeShadowInstanced);
+      this.treeShadowInstanced.dispose();
+    }
     if (this.outerRoadInstancedMesh) {
       this.scene.remove(this.outerRoadInstancedMesh);
       this.outerRoadInstancedMesh.dispose();
@@ -2150,24 +2259,29 @@ export class GameScene {
     const totalCount = allTrees.length;
     if (totalCount === 0) return;
 
-    // A. Trunk Instanced Mesh (Shared by all broadleaf trees)
-    const trunkGeo = new THREE.CylinderGeometry(0.20, 0.38, 1.4, 6);
+    // A. Flared Trunk Instanced Mesh (Anchors trees organically into the grass)
+    const trunkGeo = new THREE.CylinderGeometry(0.20, 0.44, 1.4, 6);
     this.treeTrunkInstanced = new THREE.InstancedMesh(trunkGeo, treeTrunkMat, totalCount);
     this.treeTrunkInstanced.frustumCulled = false;
 
-    // B. Studio Ghibli Fluffy Cloud Oak Foliage Mesh
+    // B. Soft Feathered Radial Drop Shadows for all Perimeter Forest Trees
+    const shadowGeo = new THREE.PlaneGeometry(2.4, 2.0);
+    this.treeShadowInstanced = new THREE.InstancedMesh(shadowGeo, getSoftShadowMaterial(0.42), totalCount);
+    this.treeShadowInstanced.frustumCulled = false;
+
+    // C. Studio Ghibli Fluffy Cloud Oak Foliage Mesh
     const oakGeo = createCloudOakLeafGeometry();
     this.treeOakLeafInstanced = new THREE.InstancedMesh(oakGeo, treeLeafMat, Math.max(oakTrees.length, 1));
     this.treeOakLeafInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(oakTrees.length, 1) * 3), 3);
     this.treeOakLeafInstanced.frustumCulled = false;
 
-    // C. Golden Birch / Autumn Maple Foliage Mesh
+    // D. Golden Birch / Autumn Maple Foliage Mesh
     const birchGeo = createBirchLeafGeometry();
     this.treeBirchLeafInstanced = new THREE.InstancedMesh(birchGeo, treeLeafMat, Math.max(birchTrees.length, 1));
     this.treeBirchLeafInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(birchTrees.length, 1) * 3), 3);
     this.treeBirchLeafInstanced.frustumCulled = false;
 
-    // D. Sakura / Apple Blossom Foliage Mesh
+    // E. Sakura / Apple Blossom Foliage Mesh
     const blossomGeo = createBlossomLeafGeometry();
     this.treeBlossomLeafInstanced = new THREE.InstancedMesh(blossomGeo, treeLeafMat, Math.max(blossomTrees.length, 1));
     this.treeBlossomLeafInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(blossomTrees.length, 1) * 3), 3);
@@ -2200,7 +2314,7 @@ export class GameScene {
       new THREE.Color(0xdcfce7), // Fresh spring sprout green
     ];
 
-    // Populate trunks
+    // Populate trunks & contact shadows
     for (let i = 0; i < totalCount; i++) {
       const p = allTrees[i];
       dummy.position.set(p.x, 0.7 * p.scale, p.z);
@@ -2208,6 +2322,13 @@ export class GameScene {
       dummy.scale.set(p.scale, p.scale, p.scale);
       dummy.updateMatrix();
       this.treeTrunkInstanced.setMatrixAt(i, dummy.matrix);
+
+      // Contact shadow flat on grass with subtle light angle offset
+      dummy.position.set(p.x + 0.12 * p.scale, 0.015, p.z + 0.12 * p.scale);
+      dummy.rotation.set(-Math.PI / 2, 0, 0);
+      dummy.scale.set(p.scale * 1.05, p.scale * 1.05, p.scale * 1.05);
+      dummy.updateMatrix();
+      this.treeShadowInstanced.setMatrixAt(i, dummy.matrix);
     }
 
     // Populate Cloud Oaks
@@ -2244,6 +2365,7 @@ export class GameScene {
     }
 
     this.treeTrunkInstanced.instanceMatrix.needsUpdate = true;
+    this.treeShadowInstanced.instanceMatrix.needsUpdate = true;
     this.treeOakLeafInstanced.instanceMatrix.needsUpdate = true;
     this.treeBirchLeafInstanced.instanceMatrix.needsUpdate = true;
     this.treeBlossomLeafInstanced.instanceMatrix.needsUpdate = true;
@@ -2252,6 +2374,7 @@ export class GameScene {
     if (this.treeBlossomLeafInstanced.instanceColor) this.treeBlossomLeafInstanced.instanceColor.needsUpdate = true;
 
     this.treeTrunkInstanced.geometry.computeBoundingSphere();
+    this.treeShadowInstanced.geometry.computeBoundingSphere();
     this.treeOakLeafInstanced.geometry.computeBoundingSphere();
     this.treeBirchLeafInstanced.geometry.computeBoundingSphere();
     this.treeBlossomLeafInstanced.geometry.computeBoundingSphere();
@@ -2265,6 +2388,7 @@ export class GameScene {
     this.treeBlossomLeafInstanced.castShadow = true;
     this.treeBlossomLeafInstanced.receiveShadow = true;
 
+    this.scene.add(this.treeShadowInstanced);
     this.scene.add(this.treeTrunkInstanced);
     this.scene.add(this.treeOakLeafInstanced);
     this.scene.add(this.treeBirchLeafInstanced);
@@ -2279,6 +2403,22 @@ export class GameScene {
     const halfW = (this.gridWidth * this.tileSize) / 2;
     const halfH = (this.gridHeight * this.tileSize) / 2;
     const totalTiles = this.gridWidth * this.gridHeight;
+
+    // Inside house_interior: render only the 100 indoor floor tiles into groundInstancedMesh and return immediately
+    if (this.currentLocation === 'house_interior') {
+      let fIdx = 0;
+      tiles.forEach((tile) => {
+        const posX = tile.x * this.tileSize - halfW + this.tileSize / 2;
+        const posZ = tile.z * this.tileSize - halfH + this.tileSize / 2;
+        dummy.position.set(posX, 0, posZ);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        this.groundInstancedMesh.setMatrixAt(fIdx++, dummy.matrix);
+      });
+      this.groundInstancedMesh.instanceMatrix.needsUpdate = true;
+      return;
+    }
 
     const currentCropKeys = new Set<string>();
     const currentDebrisKeys = new Set<string>();
@@ -3026,6 +3166,12 @@ export class GameScene {
     this.setupInstancedTrees();
     this.updateTiles(tiles);
 
+    // Toggle outdoor atmospheric layers
+    const isInterior = location === 'house_interior';
+    this.petalGroup.visible = !isInterior;
+    this.fireflyGroup.visible = false;
+    this.gateVistaGroup.visible = !isInterior;
+
     // Position player
     const targetSpawn = spawnPos || region.defaultSpawn;
     const halfW = (this.gridWidth * this.tileSize) / 2;
@@ -3034,6 +3180,12 @@ export class GameScene {
     const posZ = targetSpawn.z * this.tileSize - halfH + this.tileSize / 2;
 
     this.playerMesh.position.set(posX, 0.2, posZ);
+    this.playerJumpY = 0;
+    this.playerJumpVy = 0;
+    this.isJumping = false;
+    this.jumpSquashScale = 1.0;
+    this.currentSpeed = 0;
+    this.activeTiles = tiles;
     this.targetTilePos = null;
     this.inputVector = { x: 0, z: 0 };
     this.lastExitTriggerTime = performance.now() + 2500; // 2.5 seconds gate trigger immunity upon spawning
@@ -3189,6 +3341,24 @@ export class GameScene {
       this.dirLight.color = lut.dirColor;
       this.dirLight.intensity = weather === 'rainy' ? lut.dirIntensity * 0.5 : lut.dirIntensity;
       this.dirLight.position.set(lut.dirPosX, lut.dirPosY, lut.dirPosZ);
+
+      // Atmospheric Illusion: Toggle bioluminescent fireflies at dusk/night
+      const isNight = timeHour >= 19 || timeHour < 5;
+      this.fireflyGroup.visible = isNight;
+
+      // Adjust atmospheric fog tone and density
+      if (this.scene.fog instanceof THREE.FogExp2) {
+        if (weather === 'foggy') {
+          this.scene.fog.density = 0.016;
+          this.scene.fog.color.setHex(0xe2e8f0);
+        } else if (isNight) {
+          this.scene.fog.density = 0.009;
+          this.scene.fog.color.setHex(0x0f172a);
+        } else {
+          this.scene.fog.density = 0.0065;
+          this.scene.fog.color.copy(lut.skyColor);
+        }
+      }
     }
   }
 
@@ -3209,7 +3379,8 @@ export class GameScene {
   // Apply Performance Settings & Camera Zoom
   public applyPerformanceSettings(settings: PerformanceSettings) {
     this.settings = settings;
-    const maxPR = Math.min(window.devicePixelRatio || 1, 1.25);
+    const userScale = settings.renderScale || 1.0;
+    const maxPR = Math.min(window.devicePixelRatio || 1, 1.35 * userScale);
     this.renderer.setPixelRatio(maxPR);
     this.updateCameraBounds();
   }
@@ -3365,6 +3536,7 @@ export class GameScene {
       const delta = Math.min(this.clock.getDelta(), 0.1);
 
       // FPS Counter
+      // FPS Counter
       this.frameCount++;
       const now = performance.now();
       if (now - this.lastFpsUpdate >= 1000) {
@@ -3379,19 +3551,54 @@ export class GameScene {
     const halfW = (this.gridWidth * this.tileSize) / 2;
     const halfH = (this.gridHeight * this.tileSize) / 2;
 
-    // Movement
+    // 1. Hop / Jump Gravity & Squash Physics
+    if (this.isJumping) {
+      this.playerJumpVy -= 18.5 * delta;
+      this.playerJumpY += this.playerJumpVy * delta;
+
+      if (this.playerJumpY <= 0) {
+        this.playerJumpY = 0;
+        this.playerJumpVy = 0;
+        this.isJumping = false;
+        this.jumpSquashScale = 0.82; // Dynamic impact squash
+        const pG = this.getPlayerGridPos();
+        const elev = calculateTileElevation(pG.x, pG.z, this.currentLocation, 'grass');
+        this.spawnDustPuff(this.playerMesh.position.x - 0.12, elev + 0.2, this.playerMesh.position.z);
+        this.spawnDustPuff(this.playerMesh.position.x + 0.12, elev + 0.2, this.playerMesh.position.z);
+      }
+    }
+
+    // Spring restoration from squash
+    this.jumpSquashScale = THREE.MathUtils.lerp(this.jumpSquashScale, 1.0, 1 - Math.exp(-22.0 * delta));
+
+    // 2. Velocity Acceleration & Braking Momentum Drag
+    const targetSpeed = (this.isSprinting ? 8.6 : 5.0) * Math.min(1.0, inputLen);
+    const accelRate = inputLen > 0.08 ? (this.isSprinting ? 28.0 : 22.0) : 15.0;
+    this.currentSpeed = THREE.MathUtils.lerp(this.currentSpeed, targetSpeed, 1 - Math.exp(-accelRate * delta));
+
+    let targetBanking = 0;
+    let targetPitch = 0;
+
+    // 3. 8-Directional Locomotion with Banking & Lean
     if (inputLen > 0.08) {
       this.targetTilePos = null;
       isWalking = true;
 
       const angle = Math.atan2(this.inputVector.z, this.inputVector.x) - Math.PI / 4;
-      const speed = this.isSprinting ? 8.2 : 4.8;
-      const moveDist = speed * Math.min(1.0, inputLen) * delta;
-
       const targetFacing = -angle + Math.PI / 2;
-      const facingAlpha = 1 - Math.exp(-18.0 * delta);
-      this.playerMesh.rotation.y = THREE.MathUtils.lerp(this.playerMesh.rotation.y, targetFacing, facingAlpha);
 
+      // Calculate angular delta for banking tilt into sharp curves
+      let angleDiff = targetFacing - this.playerMesh.rotation.y;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+      targetBanking = THREE.MathUtils.clamp(-angleDiff * (this.isSprinting ? 0.32 : 0.18), -0.22, 0.22);
+      targetPitch = this.isSprinting ? 0.08 : 0.04;
+
+      const facingAlpha = 1 - Math.exp(-20.0 * delta);
+      this.playerMesh.rotation.y += angleDiff * facingAlpha;
+
+      const moveDist = this.currentSpeed * delta;
       const dx = Math.cos(angle) * moveDist;
       const dz = Math.sin(angle) * moveDist;
 
@@ -3463,30 +3670,72 @@ export class GameScene {
     const standElevY = calculateTileElevation(pGrid.x, pGrid.z, this.currentLocation, 'grass');
     const basePlayerY = standElevY + 0.2;
 
-    // Stable Player Root Elevation (Smooth gliding, frame-rate independent)
-    const elevAlpha = 1 - Math.exp(-12.0 * delta);
-    this.playerMesh.position.y = THREE.MathUtils.lerp(this.playerMesh.position.y, basePlayerY, elevAlpha);
+    // Stable Player Root Elevation + Jump offset
+    const elevAlpha = 1 - Math.exp(-16.0 * delta);
+    const targetY = basePlayerY + this.playerJumpY;
+    this.playerMesh.position.y = THREE.MathUtils.lerp(this.playerMesh.position.y, targetY, elevAlpha);
+
+    // Player Lean & Banking Angle
+    this.playerLeanAngle = THREE.MathUtils.lerp(this.playerLeanAngle, targetBanking, 1 - Math.exp(-14.0 * delta));
+    this.playerPitchAngle = THREE.MathUtils.lerp(this.playerPitchAngle, targetPitch, 1 - Math.exp(-14.0 * delta));
+
+    // Squash and stretch scale:
+    const stretchY = this.isJumping
+      ? 1.0 + Math.min(0.22, this.playerJumpVy * 0.035)
+      : 2.0 - this.jumpSquashScale;
+    const squashXZ = this.isJumping
+      ? 1.0 / Math.sqrt(Math.max(0.5, stretchY))
+      : this.jumpSquashScale;
+    this.playerMesh.scale.set(squashXZ, stretchY, squashXZ);
+
+    // Dynamic Low-Poly Ground Contact Shadow
+    if (this.playerShadowMesh) {
+      this.playerShadowMesh.position.set(this.playerMesh.position.x, basePlayerY - 0.17, this.playerMesh.position.z);
+      const shadowScale = Math.max(0.35, 1.0 - this.playerJumpY * 0.65) * (this.isSprinting ? 1.15 : 1.0);
+      this.playerShadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
+      (this.playerShadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0.08, 0.38 - this.playerJumpY * 0.35);
+    }
 
     if (isWalking) {
       this.walkAnimTime += delta * (this.isSprinting ? 22 : 12);
-      // Gentle subtle natural body sway (rotation only, does not jitter camera position)
-      this.playerMesh.rotation.z = Math.sin(this.walkAnimTime) * (this.isSprinting ? 0.060 : 0.035);
+      // Body sway + lean into turn
+      this.playerMesh.rotation.z = this.playerLeanAngle + Math.sin(this.walkAnimTime) * (this.isSprinting ? 0.055 : 0.030);
+      this.playerMesh.rotation.x = this.playerPitchAngle;
 
-      // Spawn lively dust trail particles when sprinting
-      if (this.isSprinting && Math.random() > 0.35) {
-        this.spawnDustPuff(this.playerMesh.position.x, basePlayerY, this.playerMesh.position.z);
+      // Footstep Cadence Particle Dispatch
+      this.footstepTimer += delta * (this.isSprinting ? 14 : 8);
+      if (this.footstepTimer >= 1.0) {
+        this.footstepTimer -= 1.0;
+        this.isLeftFoot = !this.isLeftFoot;
+        const offsetDist = this.isLeftFoot ? -0.15 : 0.15;
+        const perpAngle = this.playerMesh.rotation.y + Math.PI / 2;
+        const fx = this.playerMesh.position.x + Math.cos(perpAngle) * offsetDist;
+        const fz = this.playerMesh.position.z + Math.sin(perpAngle) * offsetDist;
+
+        // Check if on water tile
+        const curTile = this.activeTiles.get(`${pGrid.x}_${pGrid.z}`);
+        if (curTile?.type === 'water') {
+          this.spawnWaterSplash(fx, basePlayerY, fz);
+        } else if (this.isSprinting || Math.random() > 0.4) {
+          this.spawnDustPuff(fx, basePlayerY, fz);
+        }
       }
     } else {
+      this.walkAnimTime = 0;
       this.playerMesh.rotation.z = THREE.MathUtils.lerp(this.playerMesh.rotation.z, 0, elevAlpha);
+      this.playerMesh.rotation.x = THREE.MathUtils.lerp(this.playerMesh.rotation.x, 0, elevAlpha);
     }
 
-    // Animate Held Item Above Player Head (Harvest Moon / Stardew style overhead carrying)
     if (this.heldItemGroup) {
       this.heldItemGroup.position.y = 1.25 + Math.sin(now * 0.005) * 0.04;
       this.heldItemGroup.rotation.y += delta * 1.5;
     }
 
-    this.updateDustParticles(delta);
+    if (this.currentLocation !== 'house_interior') {
+      this.updateDustParticles(delta);
+      this.updateSplashParticles(delta);
+      this.updateAtmosphericVisuals(now, delta);
+    }
 
     // Update Tile Cursor Position & Pulsing Animation
     if (!this.isGridCursorHidden) {
@@ -3539,18 +3788,44 @@ export class GameScene {
     this.camera.position.set(this.smoothedCamFocus.x + offsetX, camY, this.smoothedCamFocus.z + offsetZ);
     this.camera.lookAt(this.smoothedCamFocus.x, this.smoothedCamFocus.y + 0.6, this.smoothedCamFocus.z);
 
-    // Rotate Windmill blades if in farm
-    if (this.currentLocation === 'farm' && Math.hypot(targetPlayerPos.x - 8.5, targetPlayerPos.z - (-10.5)) < 25) {
-      const blades = this.buildingGroup.getObjectByName('windmill_blades');
-      if (blades) {
-        blades.rotation.z += 0.02;
+    if (this.currentLocation !== 'house_interior') {
+      // Rotate Windmill blades if in farm
+      if (this.currentLocation === 'farm' && Math.hypot(targetPlayerPos.x - 8.5, targetPlayerPos.z - (-10.5)) < 25) {
+        const blades = this.buildingGroup.getObjectByName('windmill_blades');
+        if (blades) {
+          blades.rotation.z += 0.02;
+        }
+      }
+
+      // Animate Flowing River Water Illusion (Continuous texture scrolling from Right to Left / East to West)
+      riverWaterTex.offset.x += delta * 0.26;
+      riverWaterTex.offset.y = Math.sin(this.clock.getElapsedTime() * 1.5) * 0.02;
+      waterFoamTex.offset.x += delta * 0.16;
+
+      // Viewport-culled organic wind breeze waves (Canopies & Foliage Sway)
+      const windGust = Math.sin(now * 0.001) * 0.4 + 0.6;
+      if (this.buildingGroup) {
+        const focusX = this.smoothedCamFocus.x;
+        const focusZ = this.smoothedCamFocus.z;
+        const childCount = this.buildingGroup.children.length;
+        for (let i = 0; i < childCount; i++) {
+          const obj = this.buildingGroup.children[i];
+          // Culling: Only compute sway for objects within camera view radius (<= 18 meters)
+          const dx = obj.position.x - focusX;
+          const dz = obj.position.z - focusZ;
+          if (dx * dx + dz * dz > 324) continue;
+
+          if (obj.name.includes('tree') || obj.name.includes('pine') || obj.name.includes('flower')) {
+            const ph = obj.position.x * 0.25 + obj.position.z * 0.25;
+            obj.rotation.z = Math.sin(now * 0.0022 + ph) * 0.028 * windGust;
+            obj.rotation.x = Math.cos(now * 0.0018 + ph) * 0.020 * windGust;
+          } else if (obj.name.includes('lily') || obj.name.includes('boat')) {
+            obj.position.y = 0.08 + Math.sin(now * 0.003 + obj.position.x * 0.5) * 0.025;
+            obj.rotation.z = Math.sin(now * 0.002 + obj.position.z * 0.5) * 0.03;
+          }
+        }
       }
     }
-
-    // Animate Flowing River Water Illusion (Continuous texture scrolling from Right to Left / East to West)
-    riverWaterTex.offset.x += delta * 0.26;
-    riverWaterTex.offset.y = Math.sin(this.clock.getElapsedTime() * 1.5) * 0.02;
-    waterFoamTex.offset.x += delta * 0.16;
 
     this.renderer.render(this.scene, this.camera);
     this.lastFrameRenderTimeMs = performance.now() - frameStartTime;
@@ -3558,6 +3833,144 @@ export class GameScene {
       console.error('GameScene 3D animation loop error:', err);
     }
   };
+
+  // Hop / Jump Trigger (Playful low-poly leap with shadow squash & stretch)
+  public triggerPlayerJump(): boolean {
+    if (this.isJumping) return false;
+    this.isJumping = true;
+    this.playerJumpVy = 4.8;
+    this.jumpSquashScale = 1.15; // stretch upwards on launch
+
+    const pG = this.getPlayerGridPos();
+    const elev = calculateTileElevation(pG.x, pG.z, this.currentLocation, 'grass');
+    const curTile = this.activeTiles.get(`${pG.x}_${pG.z}`);
+
+    if (curTile?.type === 'water') {
+      this.spawnWaterSplash(this.playerMesh.position.x, elev + 0.2, this.playerMesh.position.z);
+      soundEngine.playWaterSplash();
+    } else {
+      this.spawnDustPuff(this.playerMesh.position.x, elev + 0.2, this.playerMesh.position.z);
+      soundEngine.playJump();
+    }
+    return true;
+  }
+
+  // Water Splash Ring Ripple Spawner
+  private spawnWaterSplash(px: number, py: number, pz: number) {
+    const item = this.splashPool.find((s) => !s.active);
+    if (!item) return;
+    item.active = true;
+    item.life = 0;
+    item.maxLife = 0.45;
+    item.mesh.position.set(px, py + 0.04, pz);
+    item.mesh.scale.set(1.0, 1.0, 1.0);
+    (item.mesh.material as THREE.MeshBasicMaterial).opacity = 0.75;
+    item.mesh.visible = true;
+  }
+
+  private updateSplashParticles(delta: number) {
+    for (let i = 0; i < this.splashPool.length; i++) {
+      const s = this.splashPool[i];
+      if (!s.active) continue;
+      s.life += delta;
+      if (s.life >= s.maxLife) {
+        s.active = false;
+        s.mesh.visible = false;
+      } else {
+        const progress = s.life / s.maxLife;
+        const sc = 1.0 + progress * 2.2;
+        s.mesh.scale.set(sc, sc, sc);
+        (s.mesh.material as THREE.MeshBasicMaterial).opacity = 0.75 * (1 - progress);
+      }
+    }
+  }
+
+  // Setup Living World Atmospheric Visual Illusions: Fireflies and Wind Petals
+  private setupAtmosphericVisuals() {
+    // 1. Bioluminescent Fireflies (Warm golden/lime glowing spheres at night)
+    const fireflyGeo = new THREE.SphereGeometry(0.045, 6, 6);
+    const fireflyMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.85,
+    });
+
+    for (let i = 0; i < 22; i++) {
+      const fMesh = new THREE.Mesh(fireflyGeo, fireflyMat);
+      const bx = (Math.random() - 0.5) * 24;
+      const bz = (Math.random() - 0.5) * 24;
+      fMesh.position.set(bx, 0.6 + Math.random() * 0.8, bz);
+      this.fireflyGroup.add(fMesh);
+      this.fireflies.push({
+        mesh: fMesh,
+        basePos: new THREE.Vector3(bx, 0.6 + Math.random() * 0.5, bz),
+        speed: 0.8 + Math.random() * 0.6,
+        phase: Math.random() * Math.PI * 2,
+        radius: 1.2 + Math.random() * 1.6,
+      });
+    }
+    this.fireflyGroup.visible = false;
+
+    // 2. Wind Breeze Petals (Gentle pastel blossom flakes drifting in the air)
+    const petalGeo = new THREE.PlaneGeometry(0.08, 0.05);
+    petalGeo.rotateX(-Math.PI / 4);
+
+    const petalColors = [0xfbcfe8, 0xf9a8d4, 0xbbf7d0, 0xfef08a];
+    const sharedPetalMats = petalColors.map((col) => new THREE.MeshBasicMaterial({
+      color: col,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.75,
+      depthWrite: false,
+    }));
+
+    for (let i = 0; i < 16; i++) {
+      const pMat = sharedPetalMats[i % sharedPetalMats.length];
+      const pMesh = new THREE.Mesh(petalGeo, pMat);
+      pMesh.position.set((Math.random() - 0.5) * 26, 0.8 + Math.random() * 2.0, (Math.random() - 0.5) * 26);
+      this.petalGroup.add(pMesh);
+      this.breezePetals.push({
+        mesh: pMesh,
+        vx: 0.8 + Math.random() * 0.6,
+        vy: -0.15 + Math.random() * 0.1,
+        vz: (Math.random() - 0.5) * 0.3,
+        rotSpeed: (Math.random() - 0.5) * 2.5,
+      });
+    }
+  }
+
+  // Update Atmospheric Visuals
+  private updateAtmosphericVisuals(now: number, delta: number) {
+    const timeSec = now * 0.001;
+
+    // Update Fireflies if visible
+    if (this.fireflyGroup.visible) {
+      for (let i = 0; i < this.fireflies.length; i++) {
+        const f = this.fireflies[i];
+        const t = timeSec * f.speed + f.phase;
+        f.mesh.position.x = f.basePos.x + Math.sin(t * 0.7) * f.radius;
+        f.mesh.position.y = f.basePos.y + Math.sin(t * 1.5) * 0.35;
+        f.mesh.position.z = f.basePos.z + Math.cos(t * 0.6) * f.radius;
+        (f.mesh.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(t * 3.0) * 0.4;
+      }
+    }
+
+    // Update Drifting Wind Petals
+    for (let i = 0; i < this.breezePetals.length; i++) {
+      const p = this.breezePetals[i];
+      p.mesh.position.x += p.vx * delta;
+      p.mesh.position.y += Math.sin(timeSec * 2.0 + i) * 0.15 * delta + p.vy * delta;
+      p.mesh.position.z += p.vz * delta;
+      p.mesh.rotation.z += p.rotSpeed * delta;
+      p.mesh.rotation.y += p.rotSpeed * 0.5 * delta;
+
+      // Wrap around bounds
+      if (p.mesh.position.x > 18) p.mesh.position.x = -18;
+      if (p.mesh.position.y < 0.2) p.mesh.position.y = 2.4;
+      if (p.mesh.position.z > 18) p.mesh.position.z = -18;
+      if (p.mesh.position.z < -18) p.mesh.position.z = 18;
+    }
+  }
 
   private spawnDustPuff(px: number, py: number, pz: number) {
     const item = this.dustPool.find((p) => !p.active);
@@ -3619,6 +4032,21 @@ export class GameScene {
       this.scene.remove(p.mesh);
     });
     this.dustPool = [];
+    if (this.playerShadowMesh) {
+      this.scene.remove(this.playerShadowMesh);
+      this.playerShadowMesh.geometry.dispose();
+      (this.playerShadowMesh.material as THREE.Material).dispose();
+    }
+    this.splashPool.forEach((s) => {
+      this.scene.remove(s.mesh);
+      s.mesh.geometry.dispose();
+      (s.mesh.material as THREE.Material).dispose();
+    });
+    this.splashPool = [];
+    this.scene.remove(this.fireflyGroup);
+    this.fireflies = [];
+    this.scene.remove(this.petalGroup);
+    this.breezePetals = [];
     this.pathButterflies.forEach((b) => {
       this.scene.remove(b.group);
       b.leftWing.geometry.dispose();

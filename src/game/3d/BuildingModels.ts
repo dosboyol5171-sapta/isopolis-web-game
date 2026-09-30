@@ -260,6 +260,71 @@ function getRoofShingleTexture(): THREE.CanvasTexture {
   return roofShingleTexture;
 }
 
+// 5. Procedural Soft Radial Vignette Drop Shadow Texture (Feathered Ghibli Ambient Occlusion - Zero Harsh Rectangles)
+let softRadialShadowTexture: THREE.CanvasTexture | null = null;
+export function getSoftRadialShadowTexture(): THREE.CanvasTexture {
+  if (softRadialShadowTexture) return softRadialShadowTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(8, 22, 10, 0.72)'); // Deep ambient occlusion core
+  grad.addColorStop(0.32, 'rgba(10, 26, 12, 0.48)');
+  grad.addColorStop(0.62, 'rgba(14, 30, 16, 0.22)');
+  grad.addColorStop(0.85, 'rgba(18, 36, 20, 0.07)');
+  grad.addColorStop(1, 'rgba(20, 40, 22, 0.0)'); // 100% transparent feathered perimeter
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(64, 64, 62, 0, Math.PI * 2);
+  ctx.fill();
+
+  softRadialShadowTexture = new THREE.CanvasTexture(canvas);
+  softRadialShadowTexture.colorSpace = THREE.SRGBColorSpace;
+  return softRadialShadowTexture;
+}
+
+export function getSoftShadowMaterial(opacity = 0.50): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    map: getSoftRadialShadowTexture(),
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
+// 6. Natural Base Grass Tufts & Shoots (Roots objects naturally into meadow turf)
+export function createBaseGrassTufts(radius: number, bladeCount = 6, height = 0.28): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'base_grass_tufts';
+
+  const grassColors = ['#4ade80', '#22c55e', '#16a34a', '#86efac'];
+  const bladeGeo = getCachedGeometry(`tuft_blade_${height.toFixed(2)}`, () => new THREE.ConeGeometry(0.045, height, 4));
+
+  for (let i = 0; i < bladeCount; i++) {
+    const angle = (i / bladeCount) * Math.PI * 2 + Math.sin(i * 3.7) * 0.35;
+    const r = radius * (0.85 + Math.cos(i * 2.1) * 0.25);
+    const bx = Math.cos(angle) * r;
+    const bz = Math.sin(angle) * r;
+
+    const col = grassColors[i % grassColors.length];
+    const mat = getCachedMaterial(col);
+    const blade = new THREE.Mesh(bladeGeo, mat);
+
+    blade.position.set(bx, height * 0.45, bz);
+    const lean = 0.28 + Math.sin(i * 1.5) * 0.15;
+    blade.rotation.x = Math.sin(angle) * lean;
+    blade.rotation.z = -Math.cos(angle) * lean;
+    blade.rotation.y = angle;
+    group.add(blade);
+  }
+
+  return group;
+}
+
 export class ModelFactory {
   // --- PLAYER MODEL (Anime Ghibli Farmer Boy matching Image 1) ---
   public static createPlayer(palette: TexturePackPalette): THREE.Group {
@@ -267,11 +332,8 @@ export class ModelFactory {
     group.name = 'player';
 
     // Soft Directional Drop Shadow (offset towards bottom-right matching top-left sun)
-    const shadowMat = getCachedMaterial('#071207', 1, 0);
-    shadowMat.transparent = true;
-    shadowMat.opacity = 0.40;
-    const shadowGeo = getCachedGeometry('player_shadow_v3', () => new THREE.PlaneGeometry(0.55, 0.42));
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    const shadowGeo = getCachedGeometry('player_shadow_soft_v4', () => new THREE.PlaneGeometry(0.70, 0.54));
+    const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.44));
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.set(0.10, 0.015, 0.12);
     group.add(shadow);
@@ -418,18 +480,23 @@ export class ModelFactory {
   public static createFarmhouse(palette: TexturePackPalette): THREE.Group {
     const house = new THREE.Group();
 
-    // 1. Soft Contact Base Drop Shadow
-    const shadowMat = new THREE.MeshBasicMaterial({
-      color: 0x071207,
-      transparent: true,
-      opacity: 0.42,
-      depthWrite: false,
-    });
-    const shadowGeo = getCachedGeometry('house_shadow_v3', () => new THREE.PlaneGeometry(4.2, 3.6));
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    // 1. Soft Contact Base Drop Shadow (Smooth feathered radial ambient occlusion)
+    const shadowGeo = getCachedGeometry('house_shadow_soft_v4', () => new THREE.PlaneGeometry(5.2, 4.4));
+    const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.48));
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.set(0, 0.015, 0.1);
     house.add(shadow);
+
+    // Natural grass tufts around the farmhouse foundation plinth
+    const frontTuftsL = createBaseGrassTufts(0.35, 4, 0.25);
+    frontTuftsL.position.set(-1.6, 0, 1.35);
+    house.add(frontTuftsL);
+    const frontTuftsR = createBaseGrassTufts(0.35, 4, 0.25);
+    frontTuftsR.position.set(1.6, 0, 1.35);
+    house.add(frontTuftsR);
+    const backTufts = createBaseGrassTufts(0.45, 6, 0.28);
+    backTufts.position.set(0, 0, -1.35);
+    house.add(backTufts);
 
     // 2. Stone Foundation Base Plinth
     const stoneBaseMat = getCachedMaterial('#57534e');
@@ -986,12 +1053,9 @@ export class ModelFactory {
   public static createChicken(): THREE.Group {
     const group = new THREE.Group();
 
-    // 1. Soft Drop Shadow
-    const shadowMat = getCachedMaterial('#071207', 1, 0);
-    shadowMat.transparent = true;
-    shadowMat.opacity = 0.38;
-    const shadowGeo = getCachedGeometry('chicken_shadow', () => new THREE.PlaneGeometry(0.70, 0.50));
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    // 1. Soft Drop Shadow (Smooth feathered radial ambient occlusion)
+    const shadowGeo = getCachedGeometry('chicken_shadow_soft', () => new THREE.PlaneGeometry(0.65, 0.50));
+    const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.38));
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.set(0.06, 0.015, 0.08);
     group.add(shadow);
@@ -1134,22 +1198,29 @@ export class ModelFactory {
     const tree = new THREE.Group();
     tree.name = 'pine_tree';
 
-    // 1. Ground Drop Shadow
-    const shadowMat = getCachedMaterial('#071207', 1, 0);
-    shadowMat.transparent = true;
-    shadowMat.opacity = 0.42;
-    const shadowGeo = getCachedGeometry('pine_shadow_geo', () => new THREE.PlaneGeometry(2.4, 1.8));
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    // 1. Soft Elliptical Radial Drop Shadow (Smooth Ghibli Ambient Occlusion - Zero Harsh Rectangles!)
+    const shadowGeo = getCachedGeometry('pine_shadow_soft_geo', () => new THREE.PlaneGeometry(2.8, 2.3));
+    const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.48));
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.set(0.2, 0.015, 0.2);
+    shadow.position.set(0.18, 0.015, 0.18);
     tree.add(shadow);
 
-    // 2. Tall Sturdy Trunk
+    // 2. Trunk Root Flare (Widened base anchoring into soil)
     const trunkMat = getCachedMaterial('#451a03');
+    const rootGeo = getCachedGeometry('pine_root_flare_geo', () => new THREE.CylinderGeometry(0.32, 0.54, 0.42, 6));
+    const rootFlare = new THREE.Mesh(rootGeo, trunkMat);
+    rootFlare.position.y = 0.20;
+    tree.add(rootFlare);
+
+    // 3. Tall Sturdy Trunk
     const trunkGeo = getCachedGeometry('pine_trunk_geo', () => new THREE.CylinderGeometry(0.20, 0.32, 2.8, 6));
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.y = 1.4;
     tree.add(trunk);
+
+    // 4. Natural Base Grass Tufts & Shoots around the trunk base
+    const grassTufts = createBaseGrassTufts(0.48, 8, 0.32);
+    tree.add(grassTufts);
 
     // 3. Four Layered Conical Needle Foliage Tiers (Layered evergreen tones)
     const pineTiers = [
@@ -1248,6 +1319,17 @@ export class ModelFactory {
     const bin = new THREE.Group();
     bin.name = 'shipping_bin';
 
+    // 0. Soft Ground Contact Shadow (Feathered Radial Ambient Occlusion)
+    const shadowGeo = getCachedGeometry('bin_shadow_soft_geo', () => new THREE.PlaneGeometry(1.65, 1.25));
+    const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.48));
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.set(0.08, 0.015, 0.08);
+    bin.add(shadow);
+
+    // Natural grass tufts around the shipping bin base
+    const tufts = createBaseGrassTufts(0.55, 6, 0.24);
+    bin.add(tufts);
+
     const chestMat = getCachedMaterial('#8B4513');
     const chestGeo = getCachedGeometry('bin_chest', () => new THREE.BoxGeometry(1.2, 0.75, 0.8));
     const chest = new THREE.Mesh(chestGeo, chestMat);
@@ -1296,19 +1378,21 @@ export class ModelFactory {
     group.name = `debris_${type}`;
 
     if (type === 'log') {
-      // 1. Soft Contact Drop Shadow on Ground
-      const shadowMat = new THREE.MeshBasicMaterial({
-        color: 0x071207,
-        transparent: true,
-        opacity: 0.42,
-        depthWrite: false,
-      });
-      const shadowGeo = getCachedGeometry('debris_log_shadow_v3', () => new THREE.PlaneGeometry(1.25, 0.62));
-      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      // 1. Soft Radial Contact Drop Shadow on Ground (Feathered Edge)
+      const shadowGeo = getCachedGeometry('debris_log_shadow_soft', () => new THREE.PlaneGeometry(1.6, 0.95));
+      const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.48));
       shadow.rotation.x = -Math.PI / 2;
       shadow.rotation.z = Math.PI / 4;
-      shadow.position.set(0, 0.015, 0);
+      shadow.position.set(0.05, 0.015, 0.05);
       group.add(shadow);
+
+      // Natural grass tufts flanking the fallen log
+      const tuftsL = createBaseGrassTufts(0.35, 4, 0.24);
+      tuftsL.position.set(-0.25, 0, 0.25);
+      group.add(tuftsL);
+      const tuftsR = createBaseGrassTufts(0.35, 4, 0.24);
+      tuftsR.position.set(0.25, 0, -0.25);
+      group.add(tuftsR);
 
       // 2. Trunk with Rich Bark & Moss Texture
       const barkMat = new THREE.MeshLambertMaterial({ map: getLogBarkTexture(), color: 0xffffff });
@@ -1335,7 +1419,24 @@ export class ModelFactory {
       end2.rotation.y = -Math.PI * 0.75;
       group.add(end2);
     } else if (type === 'wild_tree') {
+      // 1. Soft Radial Drop Shadow on Ground
+      const shadowGeo = getCachedGeometry('wild_tree_shadow_soft', () => new THREE.PlaneGeometry(1.4, 1.2));
+      const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.44));
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.set(0.08, 0.015, 0.08);
+      group.add(shadow);
+
+      // 2. Trunk Root Flare
       const trunkMat = getCachedMaterial('#5d4037');
+      const rootGeo = getCachedGeometry('wild_tree_root_flare', () => new THREE.CylinderGeometry(0.18, 0.28, 0.25, 6));
+      const root = new THREE.Mesh(rootGeo, trunkMat);
+      root.position.y = 0.125;
+      group.add(root);
+
+      // 3. Natural Base Grass Tufts around wild tree trunk
+      const tufts = createBaseGrassTufts(0.28, 6, 0.25);
+      group.add(tufts);
+
       const trunkGeo = getCachedGeometry('debris_tree_trunk', () => new THREE.CylinderGeometry(0.12, 0.18, 0.9, 6));
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
       trunk.position.set(0, 0.45, 0);
@@ -1358,18 +1459,16 @@ export class ModelFactory {
       leaf3.position.set(0.22, 0.85, -0.12);
       group.add(leaf3);
     } else if (type === 'small_stone') {
-      // 1. Soft Ground Contact Shadow
-      const shadowMat = new THREE.MeshBasicMaterial({
-        color: 0x071207,
-        transparent: true,
-        opacity: 0.38,
-        depthWrite: false,
-      });
-      const shadowGeo = getCachedGeometry('debris_small_shadow_v3', () => new THREE.CircleGeometry(0.34, 12));
-      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      // 1. Soft Ground Contact Shadow (Feathered Radial Ambient Occlusion)
+      const shadowGeo = getCachedGeometry('debris_small_soft_shadow', () => new THREE.PlaneGeometry(0.72, 0.60));
+      const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.42));
       shadow.rotation.x = -Math.PI / 2;
-      shadow.position.set(0, 0.015, 0);
+      shadow.position.set(0.04, 0.015, 0.04);
       group.add(shadow);
+
+      // Natural grass shoots around pebble
+      const tufts = createBaseGrassTufts(0.24, 4, 0.20);
+      group.add(tufts);
 
       // 2. Rounded River Pebble with Mossy Boulder Texture
       const pebbleGeo = getCachedGeometry('debris_pebble_v3', () => {
@@ -1385,18 +1484,16 @@ export class ModelFactory {
       stone.position.set(0, 0.14, 0);
       group.add(stone);
     } else if (type === 'big_stone') {
-      // 1. Soft Ground Contact Shadow (Bayangan Kontak Alami)
-      const shadowMat = new THREE.MeshBasicMaterial({
-        color: 0x071207,
-        transparent: true,
-        opacity: 0.45,
-        depthWrite: false,
-      });
-      const shadowGeo = getCachedGeometry('debris_boulder_shadow_v3', () => new THREE.CircleGeometry(0.72, 16));
-      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      // 1. Soft Ground Contact Shadow (Bayangan Kontak Alami Melingkar Halus)
+      const shadowGeo = getCachedGeometry('debris_big_soft_shadow', () => new THREE.PlaneGeometry(1.65, 1.45));
+      const shadow = new THREE.Mesh(shadowGeo, getSoftShadowMaterial(0.48));
       shadow.rotation.x = -Math.PI / 2;
-      shadow.position.set(0, 0.015, 0);
+      shadow.position.set(0.08, 0.015, 0.08);
       group.add(shadow);
+
+      // Natural lush grass clumps around the big mossy boulder
+      const tufts = createBaseGrassTufts(0.58, 8, 0.28);
+      group.add(tufts);
 
       // 2. Sculpted Natural River Boulder Geometry (Grounded, Rounded, Naturally Perturbed)
       const boulderGeo = getCachedGeometry('debris_mossy_boulder_v3', () => {

@@ -195,6 +195,12 @@ export default function App() {
     });
   }, []);
 
+  const handleJump = useCallback(() => {
+    if (sceneRef.current) {
+      sceneRef.current.triggerPlayerJump();
+    }
+  }, []);
+
   const handleTravelToRef = useRef<(target: MapLocation, spawn?: { x: number; z: number }) => void>(() => {});
 
   // Switch location handler with smooth screen dimming & full asset pre-loading
@@ -1076,6 +1082,89 @@ export default function App() {
     }
   }, []);
 
+  // Keyboard Locomotion and Gameplay Control Listener (WASD, Arrows, Space, Shift, E, Q, 1-6)
+  useEffect(() => {
+    const keysDown = new Set<string>();
+
+    const updateMovementFromKeys = () => {
+      let dx = 0;
+      let dz = 0;
+      if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) dz -= 1;
+      if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) dz += 1;
+      if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) dx -= 1;
+      if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) dx += 1;
+
+      if (dx !== 0 && dz !== 0) {
+        const len = Math.hypot(dx, dz);
+        dx /= len;
+        dz /= len;
+      }
+
+      if (sceneRef.current) {
+        sceneRef.current.setInputVector(dx, dz);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't hijack keys when typing in text input/dialogues
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handleJump();
+        return;
+      }
+
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        handleToggleSprint();
+        return;
+      }
+
+      if (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Enter') {
+        e.preventDefault();
+        handleActionButton();
+        return;
+      }
+
+      if (e.code === 'KeyQ' || e.code === 'Tab') {
+        e.preventDefault();
+        setSelectorMode((m) => (m === 'tools' ? 'items' : 'tools'));
+        return;
+      }
+
+      // Quick Tool Select 1-6
+      if (e.key >= '1' && e.key <= '6') {
+        const toolList: ToolType[] = ['hoe', 'water', 'plant', 'axe', 'sickle', 'pickaxe'];
+        const selected = toolList[parseInt(e.key, 10) - 1];
+        if (selected) {
+          setActiveTool(selected);
+          setSelectorMode('tools');
+          soundEngine.playCoin();
+        }
+        return;
+      }
+
+      if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        keysDown.add(e.code);
+        updateMovementFromKeys();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        keysDown.delete(e.code);
+        updateMovementFromKeys();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleJump, handleToggleSprint, handleActionButton, setActiveTool]);
+
   // Sleep & Daily Wild Growth for both maps
   const handleSleep = () => {
     soundEngine.playCoin();
@@ -1373,6 +1462,7 @@ export default function App() {
         onToggleGridCursor={handleToggleGridCursor}
         isSprinting={isSprinting}
         onToggleSprint={handleToggleSprint}
+        onJump={handleJump}
       />
 
       {/* DYNAMIC SCREEN DIMMING & MAP PRE-LOADING OVERLAY ("meredup lalu tampil memuat selesai memuat menerang ke normal") */}

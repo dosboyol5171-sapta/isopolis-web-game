@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useEffect } from 'react';
 import { ToolType, InventoryItem, DebrisType } from '../types/game';
-import { Droplets, Sprout, Hand, Shovel, Axe, Pickaxe, Scissors, Package, Wrench, Eye, EyeOff, Zap } from 'lucide-react';
+import { Droplets, Sprout, Hand, Shovel, Axe, Pickaxe, Scissors, Package, Wrench, Eye, EyeOff, Zap, ArrowUpCircle } from 'lucide-react';
 
 interface TouchControlsProps {
   activeTool: ToolType;
@@ -21,6 +21,7 @@ interface TouchControlsProps {
   onToggleGridCursor?: () => void;
   isSprinting?: boolean;
   onToggleSprint?: () => void;
+  onJump?: () => void;
 }
 
 export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
@@ -42,6 +43,7 @@ export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
   onToggleGridCursor,
   isSprinting = false,
   onToggleSprint,
+  onJump,
 }) => {
   const joystickRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
@@ -255,22 +257,35 @@ export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
   };
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-2 select-none w-full max-w-full overflow-hidden">
-      <div />
+    <>
+      {/* Desktop Keyboard Helper Banner (Pinned to top center on large screens, completely non-obtrusive) */}
+      <div className="hidden lg:flex fixed top-16 left-1/2 -translate-x-1/2 z-20 items-center gap-2 px-3.5 py-1 bg-black/70 backdrop-blur-xs border border-white/15 rounded-full text-[10px] text-slate-300 pointer-events-none shadow-xl font-medium select-none">
+        <span>[WASD / Panah] Gerak</span>
+        <span className="text-slate-600">·</span>
+        <span>[Spasi] Lompat</span>
+        <span className="text-slate-600">·</span>
+        <span>[Shift] Lari</span>
+        <span className="text-slate-600">·</span>
+        <span>[E / Enter] Aksi</span>
+        <span className="text-slate-600">·</span>
+        <span>[Q / Tab] Mode Alat/Tas</span>
+        <span className="text-slate-600">·</span>
+        <span>[1-6] Pilih Cepat</span>
+      </div>
 
-      {/* Main Touch Controls Bottom Container */}
-      <div className="flex flex-col gap-2 w-full pb-1">
+      {/* Main Touch Controls Bottom Container - Strictly Anchored to Bottom */}
+      <div className="fixed inset-x-0 bottom-0 pointer-events-none z-20 flex flex-col justify-end p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] select-none w-full max-w-full overflow-hidden">
         {/* Joystick (Left) and Action Button + Helper Toggles (Right) */}
-        <div className="flex justify-between items-end px-2">
-          {/* Left Block: Analog Joystick (Clean & Uncluttered) */}
-          <div className="flex flex-col items-start gap-2">
+        <div className="flex justify-between items-end px-2 mb-2">
+          {/* Left Block: Analog Joystick (Clean, Ergonomic & Uncluttered) */}
+          <div className="flex flex-col items-start">
             {/* Transparent Virtual Joystick */}
             <div
               ref={joystickRef}
               onPointerDown={handlePointerDown}
-              className="pointer-events-auto relative w-24 h-24 rounded-full bg-black/40 border border-white/25 flex items-center justify-center touch-none shadow-lg active:border-emerald-400/60"
+              className="pointer-events-auto relative w-24 h-24 rounded-full bg-black/45 border-2 border-white/30 flex items-center justify-center touch-none shadow-2xl backdrop-blur-xs active:border-emerald-400/80"
             >
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-25">
                 <div className="w-full h-[1px] bg-white" />
                 <div className="absolute h-full w-[1px] bg-white" />
               </div>
@@ -278,14 +293,14 @@ export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
               {/* Glowing Thumb Knob */}
               <div
                 ref={knobRef}
-                className="w-11 h-11 rounded-full bg-emerald-500/80 shadow-md border border-white/60 will-change-transform flex items-center justify-center pointer-events-none"
+                className="w-11 h-11 rounded-full bg-emerald-500/90 shadow-lg border-2 border-white/70 will-change-transform flex items-center justify-center pointer-events-none"
               >
-                <div className="w-3 h-3 rounded-full bg-white/60" />
+                <div className="w-3.5 h-3.5 rounded-full bg-white/70 shadow-inner" />
               </div>
             </div>
           </div>
 
-          {/* Right Block: Dynamic Action Button + Helper Toggles */}
+          {/* Right Block: Dynamic Action Button + Helper Toggles (Ergonomic Thumb Cluster) */}
           <div className="pointer-events-auto flex flex-col items-end gap-1.5">
             {/* Quick Utility Row: Penanda Petak Toggle & Mode Lari Toggle */}
             <div className="flex items-center gap-1.5">
@@ -293,10 +308,10 @@ export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
               {onToggleGridCursor && (
                 <button
                   onPointerDown={triggerGridToggleInstant}
-                  className={`touch-none px-2 py-1 rounded-xl border flex items-center gap-1 shadow-md active:scale-95 transition-all text-[9px] font-bold tracking-tight ${
+                  className={`touch-none px-2 py-1 rounded-xl border flex items-center gap-1 shadow-md active:scale-95 transition-all text-[9.5px] font-bold tracking-tight ${
                     showGridCursor
-                      ? 'bg-emerald-800/85 text-emerald-200 border-emerald-400/50 shadow-emerald-900/30'
-                      : 'bg-slate-900/85 text-slate-400 border-slate-600/40'
+                      ? 'bg-emerald-900/85 text-emerald-200 border-emerald-400/50 shadow-emerald-950/40'
+                      : 'bg-slate-900/85 text-slate-400 border-slate-700/50'
                   }`}
                   title={showGridCursor ? "Sembunyikan Penanda Petak 3D" : "Tampilkan Penanda Petak 3D"}
                 >
@@ -318,41 +333,65 @@ export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
               {onToggleSprint && (
                 <button
                   onPointerDown={triggerSprintInstant}
-                  className={`touch-none px-2.5 py-1 rounded-xl border flex items-center gap-1 shadow-md active:scale-95 transition-all text-[9.5px] font-black tracking-wide ${
+                  className={`touch-none px-2.5 py-1 rounded-xl border flex items-center gap-1 shadow-md active:scale-95 transition-all text-[9.5px] font-black tracking-wide cursor-pointer ${
                     isSprinting
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-200 shadow-orange-500/40 ring-2 ring-amber-400/30 animate-pulse'
-                      : 'bg-black/65 text-slate-300 border-white/20 hover:text-white'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-200 shadow-orange-500/40 ring-1 ring-amber-300'
+                      : 'bg-black/70 text-slate-300 border-white/25 hover:text-white'
                   }`}
-                  title="Ganti Mode Lari Cepat / Jalan Santai"
+                  title="Ganti Mode Lari Cepat / Jalan Santai [Shift]"
                 >
-                  <Zap className={`w-3.5 h-3.5 ${isSprinting ? 'text-yellow-200 fill-amber-200' : 'text-slate-300'}`} />
+                  <Zap className={`w-3.5 h-3.5 ${isSprinting ? 'text-yellow-100 fill-amber-200' : 'text-slate-300'}`} />
                   <span>{isSprinting ? 'LARI ⚡' : 'JALAN'}</span>
                 </button>
               )}
             </div>
 
-            {/* Dynamic Main Action Button (Supports Multi-Touch simultaneously with Joystick) */}
-            <button
-              onPointerDown={triggerActionInstant}
-              className={`touch-none w-20 h-20 rounded-full text-white font-extrabold shadow-xl flex flex-col items-center justify-center gap-0.5 active:scale-90 transition-all duration-75 border-2 ${
-                isCollectible
-                  ? 'bg-gradient-to-t from-amber-600 to-yellow-500 border-amber-200 shadow-amber-500/50 ring-2 ring-yellow-400/40 animate-pulse'
-                  : targetedDebris === 'weed'
-                  ? 'bg-gradient-to-t from-lime-700 to-emerald-600 border-lime-300 shadow-lime-500/40 ring-2 ring-lime-400/30'
-                  : targetedDebris === 'log' || targetedDebris === 'wild_tree'
-                  ? 'bg-gradient-to-t from-amber-800 to-orange-600 border-orange-300 shadow-orange-500/40 ring-2 ring-orange-400/30'
-                  : targetedDebris === 'small_stone' || targetedDebris === 'big_stone'
-                  ? 'bg-gradient-to-t from-slate-700 to-cyan-800 border-cyan-300 shadow-cyan-500/40 ring-2 ring-cyan-400/30'
-                  : isNearShippingBin
-                  ? 'bg-gradient-to-t from-amber-700 to-amber-500 border-amber-300 shadow-amber-600/40 ring-2 ring-amber-400/30'
-                  : 'bg-emerald-600/85 active:bg-emerald-500 border-emerald-300/40'
-              }`}
-            >
-              {getActionIcon()}
-              <span className={`text-[11px] font-black tracking-wider uppercase drop-shadow ${isCollectible || targetedDebris || isNearShippingBin ? 'text-amber-100' : ''}`}>
-                {getButtonText()}
-              </span>
-            </button>
+            {/* Action Row: Hop / Jump Button + Main Action Button side-by-side for easy thumb reach */}
+            <div className="flex items-end gap-2">
+              {/* Tombol Lompat / Hop Karakter */}
+              {onJump && (
+                <button
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onJump();
+                    try {
+                      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                        navigator.vibrate(12);
+                      }
+                    } catch (_) {}
+                  }}
+                  className="touch-none w-12 h-12 rounded-full border-2 border-sky-300/60 flex flex-col items-center justify-center gap-0.5 shadow-xl active:scale-90 transition-all bg-gradient-to-b from-sky-600 to-sky-800 text-white cursor-pointer mb-1 shadow-sky-950/50"
+                  title="Lompat / Hop Karakter [Spasi]"
+                >
+                  <ArrowUpCircle className="w-5 h-5 text-sky-200" />
+                  <span className="text-[8px] font-black tracking-wider uppercase">LOMPAT</span>
+                </button>
+              )}
+
+              {/* Dynamic Main Action Button (Supports Multi-Touch simultaneously with Joystick) */}
+              <button
+                onPointerDown={triggerActionInstant}
+                className={`touch-none w-20 h-20 rounded-full text-white font-extrabold shadow-2xl flex flex-col items-center justify-center gap-0.5 active:scale-90 transition-all duration-75 border-2 ${
+                  isCollectible
+                    ? 'bg-gradient-to-t from-amber-600 to-yellow-500 border-amber-200 shadow-amber-500/60 ring-2 ring-yellow-400/40 animate-pulse'
+                    : targetedDebris === 'weed'
+                    ? 'bg-gradient-to-t from-lime-700 to-emerald-600 border-lime-300 shadow-lime-500/50 ring-2 ring-lime-400/30'
+                    : targetedDebris === 'log' || targetedDebris === 'wild_tree'
+                    ? 'bg-gradient-to-t from-amber-800 to-orange-600 border-orange-300 shadow-orange-500/50 ring-2 ring-orange-400/30'
+                    : targetedDebris === 'small_stone' || targetedDebris === 'big_stone'
+                    ? 'bg-gradient-to-t from-slate-700 to-cyan-800 border-cyan-300 shadow-cyan-500/50 ring-2 ring-cyan-400/30'
+                    : isNearShippingBin
+                    ? 'bg-gradient-to-t from-amber-700 to-amber-500 border-amber-300 shadow-amber-600/50 ring-2 ring-amber-400/30'
+                    : 'bg-emerald-600/90 active:bg-emerald-500 border-emerald-300/60 shadow-emerald-950/60'
+                }`}
+              >
+                {getActionIcon()}
+                <span className={`text-[11px] font-black tracking-wider uppercase drop-shadow ${isCollectible || targetedDebris || isNearShippingBin ? 'text-amber-100' : ''}`}>
+                  {getButtonText()}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -486,6 +525,6 @@ export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 });

@@ -2,7 +2,6 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
 
@@ -14,33 +13,13 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// API route for NPC dialogue
-app.post('/api/npc-dialogue', async (req, res) => {
-  try {
-    const { npcName, npcRole, npcPersonality, userMessage } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return res.status(200).json({
-        reply: null,
-        fallback: true,
-      });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Kamu adalah NPC karakter video game simulasi bertani bernama "${npcName}" (${npcRole}) di desa Isopolis. Perilakumu: ${npcPersonality}. Pemain bertanya: "${userMessage}". Jawablah dalam Bahasa Indonesia yang singkat (1-2 kalimat), ramah, dan berkarakter game bertani yang hangat.`,
-    });
-
-    return res.json({ reply: response.text || 'Terima kasih sudah menyapa di desa Isopolis!' });
-  } catch (error) {
-    console.error('Gemini error:', error);
-    return res.status(200).json({
-      reply: null,
-      fallback: true,
-    });
-  }
+// Local in-game dialogue endpoint (zero external AI dependencies, fully offline-ready)
+app.post('/api/npc-dialogue', (req, res) => {
+  const { npcName } = req.body;
+  return res.json({
+    reply: `Halo dari ${npcName || 'warga desa'}! Semoga peternakan dan kebunmu berkembang makmur hari ini.`,
+    isLocal: true,
+  });
 });
 
 // Vite middleware in development
