@@ -14,58 +14,18 @@ export class MapManager {
       }
     }
 
-    // 2. Lake / Natural Pond (South-West Corner: x = 0..4, z = 22..27)
-    for (let x = 0; x <= 4; x++) {
-      for (let z = 22; z <= 27; z++) {
+    // 2. Lake / Natural Pond (South-East Corner / Kanan Bawah: x = 23..27, z = 24..27)
+    for (let x = 23; x <= 27; x++) {
+      for (let z = 24; z <= 27; z++) {
         map.set(`${x}_${z}`, { x, z, type: 'water' });
       }
     }
 
-    // 3. Sungai Mengalir Alami (Sungai Isopolis dari Kanan / Timur ke Kiri / Barat)
-    // Sungai 2-petak yang mengalir indah dari batas timur (x=27) hingga menyatu ke danau (x=4)
-    const riverCoords: [number, number][] = [
-      // Aliran Timur (x = 27..24, z = 18..20)
-      [27, 18], [27, 19],
-      [26, 18], [26, 19],
-      [25, 18], [25, 19],
-      [24, 18], [24, 19], [24, 20],
-
-      // Kelokan Tengah Timur (x = 23..21, z = 19..21)
-      [23, 19], [23, 20],
-      [22, 19], [22, 20],
-      [21, 19], [21, 20], [21, 21],
-
-      // Aliran Tengah (x = 20..17, z = 20..22)
-      [20, 20], [20, 21],
-      [19, 20], [19, 21],
-      [18, 20], [18, 21],
-      [17, 20], [17, 21], [17, 22],
-
-      // Aliran Tengah Barat (x = 16..13, z = 21..23)
-      [16, 21], [16, 22],
-      [15, 21], [15, 22],
-      [14, 21], [14, 22],
-      [13, 21], [13, 22], [13, 23],
-
-      // Aliran Barat Menuju Jembatan (x = 12..7, z = 22..23)
-      [12, 22], [12, 23],
-      [11, 22], [11, 23],
-      [10, 22], [10, 23],
-      [9, 22], [9, 23],
-      [8, 22], [8, 23],
-      [7, 22], [7, 23],
-
-      // Kolom Jembatan Kayu (x = 6, z = 22..23)
-      // Air sungai mengalir jernih di bawah kolong jembatan kayu!
-      [6, 22], [6, 23],
-
-      // Aliran Muara ke Danau (x = 5..4, z = 22..23)
-      [5, 22], [5, 23],
-      [4, 22], [4, 23],
-    ];
-    riverCoords.forEach(([x, z]) => {
-      map.set(`${x}_${z}`, { x, z, type: 'water' });
-    });
+    // 3. Sungai Lurus dari Barat ke Timur (Straight River West to East across x=0..27 at z=22 & z=23)
+    for (let x = 0; x < 28; x++) {
+      map.set(`${x}_22`, { x, z: 22, type: 'water' });
+      map.set(`${x}_23`, { x, z: 23, type: 'water' });
+    }
 
     // 4. Jalan Setapak Pedesaan (Single-Track Walking Trail) - Ramping & Cozy
     // A. Jalan Utama Vertikal (Utara - Selatan di x = 6 dari z = 0 hingga 27)
@@ -140,9 +100,7 @@ export class MapManager {
       { x: 22, z: 12, debris: 'log' },
 
       { x: 10, z: 16, debris: 'wild_tree' },
-      { x: 18, z: 23, debris: 'wild_tree' },
-      { x: 23, z: 22, debris: 'wild_tree' },
-      { x: 10, z: 24, debris: 'wild_tree' },
+      { x: 10, z: 25, debris: 'wild_tree' },
       { x: 4, z: 12, debris: 'wild_tree' },
 
       { x: 11, z: 9, debris: 'small_stone' },

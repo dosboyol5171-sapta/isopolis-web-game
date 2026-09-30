@@ -844,11 +844,17 @@ export default function App() {
             }
           });
 
-          // 2. Clean up any stale paths that are not part of the canonical path layout
+          // 2. Clean up any stale paths and stale water tiles from previous saves
           loadedFarm.forEach((tile, key) => {
             if (tile.type === 'path') {
               const canon = canonicalFarm.get(key);
               if (!canon || canon.type !== 'path') {
+                loadedFarm.set(key, { ...tile, type: 'grass' });
+              }
+            }
+            if (tile.type === 'water') {
+              const canon = canonicalFarm.get(key);
+              if (!canon || canon.type !== 'water') {
                 loadedFarm.set(key, { ...tile, type: 'grass' });
               }
             }

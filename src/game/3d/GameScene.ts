@@ -292,11 +292,10 @@ function createRiverWaterTexture(): THREE.CanvasTexture {
 const riverWaterTex = createRiverWaterTexture();
 const waterMat = new THREE.MeshStandardMaterial({
   map: riverWaterTex,
-  color: 0xdff4ff,
-  transparent: true,
-  opacity: 0.85,
-  roughness: 0.12,
-  metalness: 0.16,
+  color: 0xffffff,
+  roughness: 0.10,
+  metalness: 0.20,
+  side: THREE.DoubleSide,
 });
 const treeLeafMat = new THREE.MeshLambertMaterial({ map: foliageTex, color: 0xffffff });
 const treeTrunkMat = new THREE.MeshLambertMaterial({ map: barkTex, color: 0xffffff });
@@ -1124,15 +1123,15 @@ export function calculateTileElevation(
     // If player walks across the wooden bridge in farm (x around 6, z between 21.2 and 23.8)
     if (location === 'farm' && Math.abs(x - 6) <= 0.8 && z >= 21.2 && z <= 23.8) {
       const distFromCenter = Math.abs(z - 22.5) / 1.3;
-      return 0.08 + Math.cos(Math.min(1.0, distFromCenter) * Math.PI * 0.5) * 0.08;
+      return 0.14 + Math.cos(Math.min(1.0, distFromCenter) * Math.PI * 0.5) * 0.08;
     }
-    return -0.06;
+    return 0.02; // Elevated above meadow plane so crystal water river is 100% visible!
   }
   if (tileType === 'soil') {
-    return 0.018; // Elevated slightly above meadow base ground (Y = 0) so hoed soil tiles are 100% visible!
+    return 0.025; // Elevated slightly above meadow base ground (Y = 0) so hoed soil tiles are 100% visible!
   }
   if (tileType === 'path') {
-    return 0.012; // Natural 3D stepping stone lift
+    return 0.015; // Natural 3D stepping stone lift
   }
   return 0.0;
 }
@@ -1269,17 +1268,7 @@ export class GameScene {
 
     this.dirLight = new THREE.DirectionalLight(0xffedd5, 1.55);
     this.dirLight.position.set(-26, 38, -22); // Sun in top-left behind canopy matching Image 1
-    this.dirLight.castShadow = true;
-    this.dirLight.shadow.mapSize.width = 2048;
-    this.dirLight.shadow.mapSize.height = 2048;
-    this.dirLight.shadow.camera.near = 1;
-    this.dirLight.shadow.camera.far = 150;
-    this.dirLight.shadow.camera.left = -32;
-    this.dirLight.shadow.camera.right = 32;
-    this.dirLight.shadow.camera.top = 32;
-    this.dirLight.shadow.camera.bottom = -32;
-    this.dirLight.shadow.bias = -0.0006;
-    this.dirLight.shadow.normalBias = 0.02;
+    this.dirLight.castShadow = false;
     this.scene.add(this.dirLight);
 
     // Subtle warm golden atmospheric fog softening the distant forest (matching Image 1)
@@ -1294,10 +1283,9 @@ export class GameScene {
       powerPreference: 'high-performance',
     });
     this.renderer.setSize(width, height);
-    const maxPR = Math.min(window.devicePixelRatio || 1, 2.0);
+    const maxPR = Math.min(window.devicePixelRatio || 1, 1.5);
     this.renderer.setPixelRatio(maxPR);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.enabled = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1532,7 +1520,7 @@ export class GameScene {
     });
     this.meadowMesh = new THREE.Mesh(meadowGeo, meadowMat);
     this.meadowMesh.rotation.x = -Math.PI / 2;
-    this.meadowMesh.position.y = 0;
+    this.meadowMesh.position.y = -0.01;
     this.meadowMesh.frustumCulled = false;
     this.meadowMesh.receiveShadow = true;
     this.scene.add(this.meadowMesh);
@@ -2320,6 +2308,7 @@ export class GameScene {
       if (tile.type === 'water') {
         dummy.position.set(posX, tileElevY, posZ);
         dummy.rotation.set(0, 0, 0); // Uniform horizontal river stream from East to West
+        dummy.scale.set(1.04, 1, 1.04);
         dummy.updateMatrix();
         this.visualWaterMesh.setMatrixAt(wIdx++, dummy.matrix);
 
@@ -2335,7 +2324,7 @@ export class GameScene {
         if (hasLandNeighbor) {
           dummy.position.set(posX, tileElevY + 0.005, posZ);
           dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(1, 1, 1);
+          dummy.scale.set(1.06, 1, 1.06);
           dummy.updateMatrix();
           this.visualWaterFoamMesh.setMatrixAt(wfIdx++, dummy.matrix);
         }
@@ -2568,12 +2557,6 @@ export class GameScene {
             this.scene.remove(existingCrop);
           }
           const cropMesh = ModelFactory.createCrop(tile.crop.type, tile.crop.stage, this.activePalette);
-          cropMesh.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-            }
-          });
           cropMesh.position.set(posX, tileElevY + 0.2, posZ);
           cropMesh.userData = { stage: tile.crop.stage, type: tile.crop.type };
           cropMesh.frustumCulled = false;
@@ -2591,12 +2574,6 @@ export class GameScene {
             this.scene.remove(existingDebris);
           }
           const debrisMesh = ModelFactory.createDebris(tile.debris, this.activePalette);
-          debrisMesh.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-            }
-          });
           debrisMesh.position.set(posX, tileElevY + 0.18, posZ);
           debrisMesh.userData = { type: tile.debris };
           debrisMesh.frustumCulled = false;
@@ -2729,12 +2706,6 @@ export class GameScene {
       }
 
       if (meshGroup) {
-        meshGroup.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
         meshGroup.position.set(posX, posY, posZ);
         if (prop.rotationY) {
           meshGroup.rotation.y = prop.rotationY;
@@ -2744,20 +2715,20 @@ export class GameScene {
       }
     });
 
-    // Studio Ghibli River Water Lilies with Pink Lotus Flowers
+    // Studio Ghibli River Water Lilies with Pink Lotus Flowers floating on water
     if (this.currentLocation === 'farm') {
       const lilyLocations = [
-        { gx: 2, gz: 24, rot: 0.4 },
-        { gx: 3, gz: 26, rot: 1.8 },
+        { gx: 24, gz: 25, rot: 0.4 },
+        { gx: 26, gz: 26, rot: 1.8 },
         { gx: 9, gz: 22, rot: 2.3 },
-        { gx: 14, gz: 21, rot: 0.9 },
+        { gx: 14, gz: 23, rot: 0.9 },
         { gx: 20, gz: 22, rot: 1.5 },
       ];
       lilyLocations.forEach((loc) => {
         const lily = ModelFactory.createWaterLily();
         const lx = loc.gx * this.tileSize - halfW + this.tileSize / 2;
         const lz = loc.gz * this.tileSize - halfH + this.tileSize / 2;
-        lily.position.set(lx, -0.05, lz);
+        lily.position.set(lx, 0.022, lz);
         lily.rotation.y = loc.rot;
         this.buildingGroup.add(lily);
       });
@@ -2851,11 +2822,10 @@ export class GameScene {
     }
   }
 
-  // Smooth river centerline in world space for continuous right-to-left river drift
-  private getRiverCenterWorldZ(worldX: number): number {
-    const clampedX = Math.max(-10.0, Math.min(13.5, worldX));
-    const t = (13.5 - clampedX) / 23.5; // 0 at East source (worldX = 13.5), 1 at West mouth (worldX = -10.0)
-    return 5.0 + Math.sin(t * Math.PI * 0.5) * 4.0;
+  // Straight river centerline in world space for continuous right-to-left river drift
+  private getRiverCenterWorldZ(_worldX: number): number {
+    const halfH = (this.gridHeight * this.tileSize) / 2;
+    return 22.5 * this.tileSize - halfH; // Straight line along z = 22.5
   }
 
   // --- VOLUMETRIC SUNBEAMS / GOD RAYS STREAMING FROM TOP-LEFT (matching Image 1) ---
