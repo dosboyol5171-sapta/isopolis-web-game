@@ -23,7 +23,7 @@ interface TouchControlsProps {
   onToggleSprint?: () => void;
 }
 
-export const TouchControls: React.FC<TouchControlsProps> = ({
+export const TouchControls: React.FC<TouchControlsProps> = React.memo(({
   activeTool,
   setActiveTool,
   activeItem,
@@ -488,4 +488,4 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
       </div>
     </div>
   );
-};
+});

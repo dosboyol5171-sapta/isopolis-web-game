@@ -12,7 +12,7 @@ interface MiniMapWidgetProps {
   onClick: () => void;
 }
 
-export const MiniMapWidget: React.FC<MiniMapWidgetProps> = ({
+export const MiniMapWidget: React.FC<MiniMapWidgetProps> = React.memo(({
   currentLocation,
   playerGridPos,
   tiles,
@@ -382,4 +382,4 @@ export const MiniMapWidget: React.FC<MiniMapWidgetProps> = ({
       </div>
     </button>
   );
-};
+});

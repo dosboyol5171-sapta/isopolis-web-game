@@ -26,7 +26,7 @@ interface HUDProps {
   onOpenSettings?: () => void;
 }
 
-export const HUD: React.FC<HUDProps> = ({
+export const HUD: React.FC<HUDProps> = React.memo(({
   player,
   fps,
   playerGridPos,
@@ -237,4 +237,4 @@ export const HUD: React.FC<HUDProps> = ({
       )}
     </div>
   );
-};
+});

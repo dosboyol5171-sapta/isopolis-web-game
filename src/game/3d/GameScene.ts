@@ -1191,7 +1191,9 @@ export class GameScene {
 
   public isGridCursorHidden = false;
   public isSprinting = false;
-  private dustPool: { mesh: THREE.Mesh; life: number; maxLife: number; vx: number; vy: number; vz: number }[] = [];
+  private dustPool: { mesh: THREE.Mesh; life: number; maxLife: number; vx: number; vy: number; vz: number; active: boolean }[] = [];
+  private static readonly dustGeo = new THREE.SphereGeometry(0.11, 4, 4);
+  private static readonly dustMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.65 });
 
   private settings: PerformanceSettings;
   private inputVector = { x: 0, z: 0 };
@@ -1333,6 +1335,22 @@ export class GameScene {
 
     this.animalGroup = new THREE.Group();
     this.scene.add(this.animalGroup);
+
+    // Pre-allocate zero-allocation dust particle meshes
+    for (let i = 0; i < 16; i++) {
+      const dMesh = new THREE.Mesh(GameScene.dustGeo, GameScene.dustMat);
+      dMesh.visible = false;
+      this.scene.add(dMesh);
+      this.dustPool.push({
+        mesh: dMesh,
+        life: 0,
+        maxLife: 0.3,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        active: false,
+      });
+    }
 
     // 8. Elegant & Aesthetic Ground-Flat Tile Cursor (Penanda Petak Low-Poly Flat Super Clean)
     this.tileCursorGroup = new THREE.Group();
@@ -1777,7 +1795,7 @@ export class GameScene {
       this.gateVistaGroup.add(sign);
 
       // 2. Roadside Wooden Fences lining both sides of the outward road
-      const fenceDists = [2.2, 5.2, 8.2, 11.2];
+      const fenceDists = [2.8, 6.8];
       for (const d of fenceDists) {
         if (gate.passageOpeningSide === 'north') {
           const curveOffset = d > 4.0 ? Math.sin((d - 4.0) * 0.28) * 2.2 : 0;
@@ -1811,7 +1829,7 @@ export class GameScene {
       }
 
       // Roadside Glowing Lantern Posts
-      const lampDists = [3.5, 9.5];
+      const lampDists = [4.5];
       for (const d of lampDists) {
         if (gate.passageOpeningSide === 'north') {
           const curveOffset = d > 4.0 ? Math.sin((d - 4.0) * 0.28) * 2.2 : 0;
@@ -3273,18 +3291,20 @@ export class GameScene {
     );
   }
 
-  // Get currently targeted or standing grid position
+  private cachedPlayerGridPos = { x: 7, z: 12 };
+
+  // Get currently targeted or standing grid position (Zero Allocation)
   public getPlayerGridPos(): { x: number; z: number } {
+    if (!this.playerMesh) return this.cachedPlayerGridPos;
     const halfW = (this.gridWidth * this.tileSize) / 2;
     const halfH = (this.gridHeight * this.tileSize) / 2;
 
     const gx = Math.floor((this.playerMesh.position.x + halfW) / this.tileSize);
     const gz = Math.floor((this.playerMesh.position.z + halfH) / this.tileSize);
 
-    return {
-      x: Math.max(0, Math.min(this.gridWidth - 1, gx)),
-      z: Math.max(0, Math.min(this.gridHeight - 1, gz)),
-    };
+    this.cachedPlayerGridPos.x = Math.max(0, Math.min(this.gridWidth - 1, gx));
+    this.cachedPlayerGridPos.z = Math.max(0, Math.min(this.gridHeight - 1, gz));
+    return this.cachedPlayerGridPos;
   }
 
   private onWindowResize = () => {
@@ -3327,16 +3347,16 @@ export class GameScene {
   private animate = () => {
     if (this.isDestroyed) return;
 
-    // Exact FPS Throttler / Lock
+    // Exact FPS Throttler: Only skip frames if user explicitly sets battery saver mode (<60 FPS)
     const fpsLimit = this.settings.fpsLimit || 60;
-    if (fpsLimit > 0 && fpsLimit < 240) {
+    if (fpsLimit > 0 && fpsLimit < 60) {
       const targetInterval = 1000 / fpsLimit;
       const nowMs = performance.now();
       const elapsed = nowMs - this.lastFrameTimestamp;
-      if (elapsed < targetInterval - 1) {
-        return; // Skip rendering frame to lock target FPS
+      if (elapsed < targetInterval - 4) {
+        return; // Skip rendering frame only when power saver mode is active
       }
-      this.lastFrameTimestamp = nowMs - (elapsed % targetInterval);
+      this.lastFrameTimestamp = nowMs;
     }
 
     const frameStartTime = performance.now();
@@ -3443,8 +3463,9 @@ export class GameScene {
     const standElevY = calculateTileElevation(pGrid.x, pGrid.z, this.currentLocation, 'grass');
     const basePlayerY = standElevY + 0.2;
 
-    // Stable Player Root Elevation (Smooth gliding, no jittery camera bounce)
-    this.playerMesh.position.y = THREE.MathUtils.lerp(this.playerMesh.position.y, basePlayerY, 0.2);
+    // Stable Player Root Elevation (Smooth gliding, frame-rate independent)
+    const elevAlpha = 1 - Math.exp(-12.0 * delta);
+    this.playerMesh.position.y = THREE.MathUtils.lerp(this.playerMesh.position.y, basePlayerY, elevAlpha);
 
     if (isWalking) {
       this.walkAnimTime += delta * (this.isSprinting ? 22 : 12);
@@ -3456,7 +3477,7 @@ export class GameScene {
         this.spawnDustPuff(this.playerMesh.position.x, basePlayerY, this.playerMesh.position.z);
       }
     } else {
-      this.playerMesh.rotation.z = THREE.MathUtils.lerp(this.playerMesh.rotation.z, 0, 0.2);
+      this.playerMesh.rotation.z = THREE.MathUtils.lerp(this.playerMesh.rotation.z, 0, elevAlpha);
     }
 
     // Animate Held Item Above Player Head (Harvest Moon / Stardew style overhead carrying)
@@ -3481,10 +3502,6 @@ export class GameScene {
       this.tileCursor3x3.position.x = cursorX;
       this.tileCursor3x3.position.y = standElevY + hoverPulse;
       this.tileCursor3x3.position.z = cursorZ;
-
-      if (this.cursorFillMat) {
-        this.cursorFillMat.opacity = 0.30 + Math.sin(now * 0.006) * 0.10;
-      }
     } else {
       this.tileCursor.visible = false;
       this.tileCursor3x3.visible = false;
@@ -3493,51 +3510,29 @@ export class GameScene {
     // Smooth 3D Perspective Camera Tracking & Auto-Tilt near Gates
     const targetPlayerPos = this.playerMesh.position;
 
-    // Check proximity to ANY gate or door trigger area
-    let isNearGate = false;
-    const regionGates = WorldRegistry.getRegion(this.currentLocation).gates;
-    const curGridPos = this.getPlayerGridPos();
-
-    for (const g of regionGates) {
-      const gateCenterX = (g.triggerArea.minX + g.triggerArea.maxX) / 2;
-      const gateCenterZ = (g.triggerArea.minZ + g.triggerArea.maxZ) / 2;
-      const distToGate = Math.hypot(curGridPos.x - gateCenterX, curGridPos.z - gateCenterZ);
-      if (distToGate <= 4.2) {
-        isNearGate = true;
-        break;
-      }
-    }
-
-    // Target Pitch: 28° (0.488 rad) when approaching gate for cinematic entrance, 38° (0.663 rad) normal for strong 3D depth
-    // Target Dist: 10.2 units in compact maps for cozy close zoom, 13.5 units in large maps for rich perspective
+    // Target Pitch & Distance
     const isCompactMap = this.currentLocation === 'crossroads' || this.currentLocation === 'house_interior';
-    const targetPitch = isNearGate ? 0.488 : 0.663;
     const defaultDist = isCompactMap ? 10.2 : 13.5;
-    const targetDist = isNearGate ? 9.8 : defaultDist;
-
-    const camPitchAlpha = 1 - Math.exp(-6.0 * delta);
-    this.currentPitch = THREE.MathUtils.lerp(this.currentPitch, targetPitch, camPitchAlpha);
-    this.currentCamDist = THREE.MathUtils.lerp(this.currentCamDist, targetDist, camPitchAlpha);
 
     const maxCamSpan = halfW - 4.2;
     const rawFocusX = Math.max(-maxCamSpan, Math.min(maxCamSpan, targetPlayerPos.x));
     const rawFocusZ = Math.max(-maxCamSpan, Math.min(maxCamSpan, targetPlayerPos.z));
-    const rawFocusY = basePlayerY;
+    const rawFocusY = 0.2; // Fixed smooth vertical focal plane (eliminates vertical camera bobbing)
 
     // Smoothly track focal center without any jitter or desync
     if (!this.isCamInitialized) {
       this.smoothedCamFocus.set(rawFocusX, rawFocusY, rawFocusZ);
       this.isCamInitialized = true;
     } else {
-      const focusAlpha = 1 - Math.exp(-14.0 * delta);
+      const focusAlpha = 1 - Math.exp(-10.0 * delta);
       this.smoothedCamFocus.x = THREE.MathUtils.lerp(this.smoothedCamFocus.x, rawFocusX, focusAlpha);
       this.smoothedCamFocus.y = THREE.MathUtils.lerp(this.smoothedCamFocus.y, rawFocusY, focusAlpha);
       this.smoothedCamFocus.z = THREE.MathUtils.lerp(this.smoothedCamFocus.z, rawFocusZ, focusAlpha);
     }
 
     const camAzimuth = Math.PI * 0.20; // 36 degrees rotated right for rich 3D perspective
-    const horizDist = this.currentCamDist * Math.cos(this.currentPitch);
-    const camY = this.smoothedCamFocus.y + this.currentCamDist * Math.sin(this.currentPitch);
+    const horizDist = defaultDist * Math.cos(0.663);
+    const camY = this.smoothedCamFocus.y + defaultDist * Math.sin(0.663);
     const offsetX = horizDist * Math.cos(camAzimuth);
     const offsetZ = horizDist * Math.sin(camAzimuth);
 
@@ -3552,42 +3547,10 @@ export class GameScene {
       }
     }
 
-    // Animate Nature Butterflies (Gentle Wing Flaps & Figure-8 Flight along Country Road)
-    if (this.currentLocation === 'farm' && this.pathButterflies.length > 0) {
-      const time = this.clock.getElapsedTime();
-      this.pathButterflies.forEach((b) => {
-        const flap = Math.sin(time * 24 + b.phase) * 0.75;
-        b.leftWing.rotation.y = flap;
-        b.rightWing.rotation.y = -flap;
-        const flightAngle = time * b.speed + b.phase;
-        b.group.position.x = b.basePos.x + Math.sin(flightAngle) * b.radius;
-        b.group.position.z = b.basePos.z + Math.cos(flightAngle * 0.8) * b.radius;
-        b.group.position.y = b.basePos.y + Math.sin(time * 3 + b.phase) * 0.15;
-        b.group.rotation.y = -flightAngle + Math.PI / 2;
-      });
-    }
-
     // Animate Flowing River Water Illusion (Continuous texture scrolling from Right to Left / East to West)
     riverWaterTex.offset.x += delta * 0.26;
     riverWaterTex.offset.y = Math.sin(this.clock.getElapsedTime() * 1.5) * 0.02;
     waterFoamTex.offset.x += delta * 0.16;
-
-    // Animate Floating River Foam Drift & Current Ribbons flowing East to West
-    if (this.currentLocation === 'farm' && this.riverFoamParticles.length > 0) {
-      const time = this.clock.getElapsedTime();
-      this.riverFoamParticles.forEach((p) => {
-        p.mesh.position.x -= delta * p.speed;
-        p.mesh.position.z = this.getRiverCenterWorldZ(p.mesh.position.x) + p.offsetZ;
-        p.mesh.position.y = -0.042 + Math.sin(time * 3.5 + p.phase) * 0.005;
-        p.mesh.rotation.y = 0.08 * Math.sin(time * 2.0 + p.phase);
-
-        // Reset back to East source once it reaches the lake
-        if (p.mesh.position.x < -10.2) {
-          p.mesh.position.x = 13.5 + Math.random() * 0.8;
-          p.offsetZ = (Math.random() - 0.5) * 0.7;
-        }
-      });
-    }
 
     this.renderer.render(this.scene, this.camera);
     this.lastFrameRenderTimeMs = performance.now() - frameStartTime;
@@ -3597,42 +3560,33 @@ export class GameScene {
   };
 
   private spawnDustPuff(px: number, py: number, pz: number) {
-    if (this.dustPool.length > 18) return;
-    const dustGeo = new THREE.SphereGeometry(0.10 + Math.random() * 0.08, 6, 6);
-    const dustMat = new THREE.MeshBasicMaterial({
-      color: 0xfef08a,
-      transparent: true,
-      opacity: 0.65,
-    });
-    const mesh = new THREE.Mesh(dustGeo, dustMat);
-    mesh.position.set(px + (Math.random() - 0.5) * 0.22, py + 0.03, pz + (Math.random() - 0.5) * 0.22);
-    this.scene.add(mesh);
-    this.dustPool.push({
-      mesh,
-      life: 0,
-      maxLife: 0.30,
-      vx: (Math.random() - 0.5) * 0.6,
-      vy: 0.5 + Math.random() * 0.3,
-      vz: (Math.random() - 0.5) * 0.6,
-    });
+    const item = this.dustPool.find((p) => !p.active);
+    if (!item) return;
+    item.active = true;
+    item.life = 0;
+    item.maxLife = 0.25 + Math.random() * 0.08;
+    item.vx = (Math.random() - 0.5) * 0.45;
+    item.vy = 0.35 + Math.random() * 0.25;
+    item.vz = (Math.random() - 0.5) * 0.45;
+    item.mesh.position.set(px + (Math.random() - 0.5) * 0.18, py + 0.03, pz + (Math.random() - 0.5) * 0.18);
+    item.mesh.scale.setScalar(1.0);
+    item.mesh.visible = true;
   }
 
   private updateDustParticles(delta: number) {
-    for (let i = this.dustPool.length - 1; i >= 0; i--) {
+    for (let i = 0; i < this.dustPool.length; i++) {
       const p = this.dustPool[i];
+      if (!p.active) continue;
       p.life += delta;
       if (p.life >= p.maxLife) {
-        this.scene.remove(p.mesh);
-        p.mesh.geometry.dispose();
-        (p.mesh.material as THREE.Material).dispose();
-        this.dustPool.splice(i, 1);
+        p.active = false;
+        p.mesh.visible = false;
       } else {
         const progress = p.life / p.maxLife;
         p.mesh.position.x += p.vx * delta;
         p.mesh.position.y += p.vy * delta;
         p.mesh.position.z += p.vz * delta;
-        p.mesh.scale.setScalar(1.0 + progress * 1.6);
-        (p.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - progress) * 0.65;
+        p.mesh.scale.setScalar(1.0 + progress * 1.5);
       }
     }
   }
@@ -3661,6 +3615,10 @@ export class GameScene {
   public destroy() {
     this.isDestroyed = true;
     window.removeEventListener('resize', this.onWindowResize);
+    this.dustPool.forEach((p) => {
+      this.scene.remove(p.mesh);
+    });
+    this.dustPool = [];
     this.pathButterflies.forEach((b) => {
       this.scene.remove(b.group);
       b.leftWing.geometry.dispose();

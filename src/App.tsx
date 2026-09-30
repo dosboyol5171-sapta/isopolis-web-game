@@ -916,18 +916,26 @@ export default function App() {
       handleTravelToRef.current(targetLocation, spawnPos);
     });
 
-    // Monitor interval
+    // Monitor interval (Throttled cleanly to prevent React DOM choking)
+    let lastMetricUpdate = 0;
     const monitorInterval = setInterval(() => {
       if (sceneRef.current) {
-        const metrics = sceneRef.current.getPerformanceMetrics();
-        setFps(metrics.fps);
-        setTelemetry(metrics);
+        const now = performance.now();
+        // Update FPS & hardware telemetry once every 1000ms (1s) to avoid UI thrashing
+        if (now - lastMetricUpdate >= 1000) {
+          const metrics = sceneRef.current.getPerformanceMetrics();
+          setFps(metrics.fps);
+          setTelemetry(metrics);
+          lastMetricUpdate = now;
+        }
+
+        // Fast player position check (lightweight grid diffing only)
         const p = sceneRef.current.getPlayerGridPos();
         setPlayerPos((prev) => (prev.x === p.x && prev.z === p.z ? prev : p));
         const near = sceneRef.current.isNearShippingBin();
         setIsNearShippingBin((prev) => (prev === near ? prev : near));
       }
-    }, 150);
+    }, 250);
 
     return () => {
       clearInterval(monitorInterval);
