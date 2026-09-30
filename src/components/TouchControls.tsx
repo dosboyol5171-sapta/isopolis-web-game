@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { ToolType, InventoryItem, DebrisType } from '../types/game';
 import { Droplets, Sprout, Hand, Shovel, Axe, Pickaxe, Scissors, Package, Wrench, Eye, EyeOff, Zap } from 'lucide-react';
 
@@ -48,38 +48,16 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   const isDraggingRef = useRef(false);
   const pointerIdRef = useRef<number | null>(null);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    isDraggingRef.current = true;
-    pointerIdRef.current = e.pointerId;
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    } catch (_) {}
-    updateKnob(e.clientX, e.clientY);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDraggingRef.current || pointerIdRef.current !== e.pointerId) return;
-    updateKnob(e.clientX, e.clientY);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (pointerIdRef.current === e.pointerId) {
-      isDraggingRef.current = false;
-      pointerIdRef.current = null;
-      try {
-        if (e.currentTarget && (e.currentTarget as HTMLElement).hasPointerCapture?.(e.pointerId)) {
-          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-        }
-      } catch (_) {}
-      if (knobRef.current) {
-        knobRef.current.style.transform = 'translate3d(0px, 0px, 0px)';
-      }
-      onMoveVector(0, 0);
+  const resetJoystick = useCallback(() => {
+    isDraggingRef.current = false;
+    pointerIdRef.current = null;
+    if (knobRef.current) {
+      knobRef.current.style.transform = 'translate3d(0px, 0px, 0px)';
     }
-  };
+    onMoveVector(0, 0);
+  }, [onMoveVector]);
 
-  const updateKnob = (clientX: number, clientY: number) => {
+  const updateKnob = useCallback((clientX: number, clientY: number) => {
     if (!joystickRef.current) return;
     const rect = joystickRef.current.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -104,7 +82,50 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
     }
 
     onMoveVector(knobX / maxRadius, knobY / maxRadius);
+  }, [onMoveVector]);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    isDraggingRef.current = true;
+    pointerIdRef.current = e.pointerId;
+    updateKnob(e.clientX, e.clientY);
   };
+
+  // Robust window-level multi-touch pointer listeners
+  // Ensures analog tracking is never lost or hijacked when tapping other buttons with other fingers
+  useEffect(() => {
+    const onWindowPointerMove = (e: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+      if (pointerIdRef.current !== e.pointerId) return;
+      updateKnob(e.clientX, e.clientY);
+    };
+
+    const onWindowPointerUp = (e: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+      if (pointerIdRef.current === e.pointerId) {
+        resetJoystick();
+      }
+    };
+
+    const onWindowPointerCancel = (e: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+      if (pointerIdRef.current === e.pointerId) {
+        resetJoystick();
+      }
+    };
+
+    window.addEventListener('pointermove', onWindowPointerMove, { passive: false });
+    window.addEventListener('pointerup', onWindowPointerUp, { passive: false });
+    window.addEventListener('pointercancel', onWindowPointerCancel, { passive: false });
+
+    return () => {
+      window.removeEventListener('pointermove', onWindowPointerMove);
+      window.removeEventListener('pointerup', onWindowPointerUp);
+      window.removeEventListener('pointercancel', onWindowPointerCancel);
+    };
+  }, [updateKnob, resetJoystick]);
 
   const handleAction = useCallback(() => {
     try {
@@ -117,9 +138,10 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
 
   // Multi-Touch Instant Trigger Ref & Helpers (Prevents click delays & touch conflicts while holding analog)
   const lastActionTimeRef = useRef(0);
-  const triggerActionInstant = useCallback((e?: React.PointerEvent) => {
+  const triggerActionInstant = useCallback((e?: React.PointerEvent | React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
+      e.preventDefault();
     }
     const now = Date.now();
     if (now - lastActionTimeRef.current < 100) return;
@@ -128,9 +150,10 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   }, [handleAction]);
 
   const lastSprintTimeRef = useRef(0);
-  const triggerSprintInstant = useCallback((e?: React.PointerEvent) => {
+  const triggerSprintInstant = useCallback((e?: React.PointerEvent | React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
+      e.preventDefault();
     }
     const now = Date.now();
     if (now - lastSprintTimeRef.current < 120) return;
@@ -139,9 +162,10 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   }, [onToggleSprint]);
 
   const lastGridToggleTimeRef = useRef(0);
-  const triggerGridToggleInstant = useCallback((e?: React.PointerEvent) => {
+  const triggerGridToggleInstant = useCallback((e?: React.PointerEvent | React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
+      e.preventDefault();
     }
     const now = Date.now();
     if (now - lastGridToggleTimeRef.current < 120) return;
@@ -150,9 +174,10 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   }, [onToggleGridCursor]);
 
   const lastSelectorModeTimeRef = useRef(0);
-  const triggerSelectorModeInstant = useCallback((e?: React.PointerEvent) => {
+  const triggerSelectorModeInstant = useCallback((e?: React.PointerEvent | React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
+      e.preventDefault();
     }
     const now = Date.now();
     if (now - lastSelectorModeTimeRef.current < 120) return;
@@ -243,9 +268,6 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
             <div
               ref={joystickRef}
               onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
               className="pointer-events-auto relative w-24 h-24 rounded-full bg-black/40 border border-white/25 flex items-center justify-center touch-none shadow-lg active:border-emerald-400/60"
             >
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
@@ -352,10 +374,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
         <div className="pointer-events-auto w-full bg-black/75 border border-white/20 rounded-2xl p-1.5 shadow-xl flex items-center gap-2 overflow-hidden relative">
           {/* Integrated Left Switcher Button (Stays stationary on left) */}
           <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onToggleSelectorMode();
-            }}
+            onPointerDown={triggerSelectorModeInstant}
             className={`shrink-0 touch-none px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 shadow-md active:scale-95 transition-all text-[10px] font-black tracking-wide z-10 cursor-pointer ${
               selectorMode === 'items'
                 ? 'bg-amber-600/95 text-white border-amber-300/80 shadow-amber-500/30 ring-1 ring-amber-400/40'
@@ -395,8 +414,9 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
                   return (
                     <button
                       key={t.id}
-                      onClick={(e) => {
+                      onPointerDown={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         setActiveTool(t.id);
                         if (t.id === 'plant' && onOpenSeedSelect) {
                           onOpenSeedSelect();
@@ -428,8 +448,9 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
                     return (
                       <button
                         key={item.id}
-                        onClick={(e) => {
+                        onPointerDown={(e) => {
                           e.stopPropagation();
+                          e.preventDefault();
                           setActiveItem(item);
                           try {
                             if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {

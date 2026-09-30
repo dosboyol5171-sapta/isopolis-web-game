@@ -120,9 +120,7 @@ export default function App() {
     stage: 'idle',
   });
 
-  const [animals, setAnimals] = useState<PlacedAnimal[]>([
-    { id: 'c1', type: 'chicken', x: 7, z: 7, lastFedTimestamp: Date.now(), lastProduceTimestamp: Date.now(), affection: 5 },
-  ]);
+  const [animals, setAnimals] = useState<PlacedAnimal[]>([]);
 
   const [quests, setQuests] = useState<Quest[]>([
     { id: 'q1', title: 'Cangkul Ladang Pertamamu', description: 'Gunakan Cangkul untuk membuka 3 petak tanah', rewardCoins: 50, rewardExp: 20, targetType: 'water', requiredCount: 3, currentCount: 1, completed: false },
@@ -836,39 +834,33 @@ export default function App() {
         setPlayer(snapshot.player);
         if (snapshot.farmTiles) {
           const loadedFarm = new Map(snapshot.farmTiles);
-          // Strictly sanitize obsolete second lane paths (x = 7 and z = 8) back to grass
-          for (let z = 0; z <= 27; z++) {
-            const t7 = loadedFarm.get(`7_${z}`);
-            if (t7 && t7.type === 'path') {
-              loadedFarm.set(`7_${z}`, { x: 7, z, type: 'grass' });
+          const canonicalFarm = MapManager.generateFarmTiles();
+
+          // 1. Ensure all canonical road paths and water tiles from MapManager are perfectly applied
+          canonicalFarm.forEach((canonTile, key) => {
+            if (canonTile.type === 'path' || canonTile.type === 'water') {
+              const current = loadedFarm.get(key);
+              loadedFarm.set(key, { ...current, x: canonTile.x, z: canonTile.z, type: canonTile.type });
             }
-          }
-          for (let x = 6; x <= 23; x++) {
-            const t8 = loadedFarm.get(`${x}_8`);
-            if (t8 && t8.type === 'path') {
-              loadedFarm.set(`${x}_8`, { x, z: 8, type: 'grass' });
-            }
-          }
-          // Sanitize wide branches to single width
-          for (let x = 12; x <= 14; x++) {
-            if (x !== 13) {
-              const t5 = loadedFarm.get(`${x}_5`);
-              if (t5 && t5.type === 'path') loadedFarm.set(`${x}_5`, { x, z: 5, type: 'grass' });
-              const t6 = loadedFarm.get(`${x}_6`);
-              if (t6 && t6.type === 'path') loadedFarm.set(`${x}_6`, { x, z: 6, type: 'grass' });
-            }
-          }
-          [15, 17, 20, 22].forEach((x) => {
-            const t6 = loadedFarm.get(`${x}_6`);
-            if (t6 && t6.type === 'path') loadedFarm.set(`${x}_6`, { x, z: 6, type: 'grass' });
           });
+
+          // 2. Clean up any stale paths that are not part of the canonical path layout
+          loadedFarm.forEach((tile, key) => {
+            if (tile.type === 'path') {
+              const canon = canonicalFarm.get(key);
+              if (!canon || canon.type !== 'path') {
+                loadedFarm.set(key, { ...tile, type: 'grass' });
+              }
+            }
+          });
+
           setFarmTiles(loadedFarm);
         }
         if (snapshot.villageTiles) setVillageTiles(new Map(snapshot.villageTiles));
         if (snapshot.houseInteriorTiles) setHouseInteriorTiles(new Map(snapshot.houseInteriorTiles));
         if (snapshot.inventory) setInventory(snapshot.inventory);
         if (snapshot.shippingBin) setShippingBin(snapshot.shippingBin);
-        if (snapshot.animals) setAnimals(snapshot.animals);
+        if (snapshot.animals) setAnimals(snapshot.animals.filter((a) => !(a.type === 'chicken' && a.x === 7 && a.z === 7)));
         if (snapshot.quests) setQuests(snapshot.quests);
         if (snapshot.settings) setSettings(snapshot.settings);
       }
@@ -1424,6 +1416,10 @@ export default function App() {
         playerGridPos={playerPos}
         farmTiles={farmTiles}
         villageTiles={villageTiles}
+        crossroadsTiles={crossroadsTiles}
+        mountainTiles={mountainTiles}
+        coastTiles={coastTiles}
+        houseTiles={houseInteriorTiles}
         onTravelTo={handleTravelTo}
         onOpenTexturePack={() => setShowTexturePackModal(true)}
         onOpenMarket={() => setShowMarketModal(true)}

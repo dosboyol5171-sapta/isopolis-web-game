@@ -28,6 +28,8 @@ export type StaticPropType =
   | 'shipping_bin'
   | 'wooden_bridge'
   | 'gate'
+  | 'wooden_fence'
+  | 'pine_tree'
   | 'interior_bed'
   | 'interior_kitchen'
   | 'interior_chest'
@@ -221,8 +223,25 @@ WorldRegistry.registerRegion({
     { id: 'farmhouse', type: 'farmhouse', gridX: 13, gridZ: 5 },
     { id: 'windmill', type: 'windmill', gridX: 21, gridZ: 5 },
     { id: 'shipping_bin', type: 'shipping_bin', gridX: 16, gridZ: 6 },
-    { id: 'wooden_bridge', type: 'wooden_bridge', gridX: 6, gridZ: 23 },
+    { id: 'wooden_bridge', type: 'wooden_bridge', gridX: 6, gridZ: 22.5 },
     { id: 'north_gate', type: 'gate', gridX: 6, gridZ: 0, rotationY: 0 },
+    // Conifer Pine/Fir Trees in the northern forest backdrop (matching Image 1)
+    { id: 'pine_1', type: 'pine_tree', gridX: 4, gridZ: 2 },
+    { id: 'pine_2', type: 'pine_tree', gridX: 8, gridZ: 1.5 },
+    { id: 'pine_3', type: 'pine_tree', gridX: 18, gridZ: 1.5 },
+    { id: 'pine_4', type: 'pine_tree', gridX: 24, gridZ: 2 },
+    // Rustic Post & Rail Fences enclosing farmhouse yard & framing garden neatly without blocking roads
+    { id: 'fence_back_1', type: 'wooden_fence', gridX: 11, gridZ: 3.2, rotationY: 0 },
+    { id: 'fence_back_2', type: 'wooden_fence', gridX: 13, gridZ: 3.2, rotationY: 0 },
+    { id: 'fence_back_3', type: 'wooden_fence', gridX: 15, gridZ: 3.2, rotationY: 0 },
+    { id: 'fence_back_4', type: 'wooden_fence', gridX: 17, gridZ: 3.2, rotationY: 0 },
+    { id: 'fence_side_1', type: 'wooden_fence', gridX: 9.5, gridZ: 4.2, rotationY: Math.PI / 2 },
+    { id: 'fence_side_2', type: 'wooden_fence', gridX: 9.5, gridZ: 6.2, rotationY: Math.PI / 2 },
+    { id: 'fence_garden_1', type: 'wooden_fence', gridX: 11, gridZ: 9.5, rotationY: 0 },
+    { id: 'fence_garden_2', type: 'wooden_fence', gridX: 13, gridZ: 9.5, rotationY: 0 },
+    { id: 'fence_garden_3', type: 'wooden_fence', gridX: 15, gridZ: 9.5, rotationY: 0 },
+    { id: 'fence_east_1', type: 'wooden_fence', gridX: 18.5, gridZ: 4.2, rotationY: Math.PI / 2 },
+    { id: 'fence_east_2', type: 'wooden_fence', gridX: 18.5, gridZ: 6.2, rotationY: Math.PI / 2 },
   ],
   // Solid obstacle collision boxes di lahan kebun luar (TIDAK TEMBUS RUMAH / KINCIR / LUMBUNG)
   solidObstacles: [

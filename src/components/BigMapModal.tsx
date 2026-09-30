@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PlayerData, TileState, MapLocation } from '../types/game';
+import { WorldRegistry } from '../game/WorldRegistry';
 import {
   MapPin,
   X,
@@ -27,6 +28,9 @@ interface BigMapModalProps {
   playerGridPos: { x: number; z: number };
   farmTiles: Map<string, TileState>;
   villageTiles: Map<string, TileState>;
+  crossroadsTiles?: Map<string, TileState>;
+  mountainTiles?: Map<string, TileState>;
+  coastTiles?: Map<string, TileState>;
   houseTiles?: Map<string, TileState>;
   onTravelTo: (target: MapLocation) => void;
   onOpenTexturePack: () => void;
@@ -45,6 +49,9 @@ export const BigMapModal: React.FC<BigMapModalProps> = ({
   playerGridPos,
   farmTiles,
   villageTiles,
+  crossroadsTiles,
+  mountainTiles,
+  coastTiles,
   houseTiles,
   onTravelTo,
   onOpenTexturePack,
@@ -60,13 +67,25 @@ export const BigMapModal: React.FC<BigMapModalProps> = ({
   if (!isOpen) return null;
 
   const currentViewLocation = activeTab;
+  const activeRegion = WorldRegistry.getRegion(currentViewLocation);
   const isViewingFarm = currentViewLocation === 'farm';
   const isViewingVillage = currentViewLocation === 'village';
   const isViewingHouse = currentViewLocation === 'house_interior';
 
-  const gridWidth = isViewingFarm ? 28 : isViewingVillage ? 48 : 10;
-  const gridHeight = isViewingFarm ? 28 : isViewingVillage ? 48 : 10;
-  const currentTiles = isViewingFarm ? farmTiles : isViewingVillage ? villageTiles : houseTiles || farmTiles;
+  const gridWidth = activeRegion ? activeRegion.width : 28;
+  const gridHeight = activeRegion ? activeRegion.height : 28;
+  const currentTiles =
+    isViewingFarm
+      ? farmTiles
+      : currentViewLocation === 'village'
+      ? villageTiles
+      : currentViewLocation === 'crossroads'
+      ? crossroadsTiles || farmTiles
+      : currentViewLocation === 'mountain'
+      ? mountainTiles || farmTiles
+      : currentViewLocation === 'coast'
+      ? coastTiles || farmTiles
+      : houseTiles || farmTiles;
   const isPlayerOnThisMap = player.currentLocation === currentViewLocation;
 
   return (
@@ -237,7 +256,14 @@ export const BigMapModal: React.FC<BigMapModalProps> = ({
               style={{
                 gridTemplateColumns: `repeat(${gridWidth}, minmax(0, 1fr))`,
                 gridTemplateRows: `repeat(${gridHeight}, minmax(0, 1fr))`,
-                backgroundColor: '#2e7d32',
+                backgroundColor:
+                  isViewingHouse
+                    ? '#92400e'
+                    : currentViewLocation === 'mountain'
+                    ? '#475569'
+                    : currentViewLocation === 'coast'
+                    ? '#e2b170'
+                    : '#2e7d32',
               }}
             >
               {Array.from({ length: gridHeight }).map((_, z) =>
@@ -248,23 +274,30 @@ export const BigMapModal: React.FC<BigMapModalProps> = ({
                   const isWater = tile?.type === 'water';
                   const isPath = tile?.type === 'path';
                   const isSoil = tile?.type === 'soil';
+                  const isStone = tile?.type === 'stone';
+                  const isLog = tile?.type === 'log';
+                  const isBuilding = tile?.type === 'building';
 
                   // Farm Specific Landmarks (28x28)
                   const isHouse = isViewingFarm && (x >= 12 && x <= 15) && (z >= 2 && z <= 5);
                   const isWindmill = isViewingFarm && (x >= 19 && x <= 21) && (z >= 2 && z <= 5);
                   const isShippingBin = isViewingFarm && (x === 16 || x === 17) && (z === 5 || z === 6);
-                  const isBridge = isViewingFarm && x === 7 && z === 23;
+                  const isBridge = isViewingFarm && x === 6 && (z === 22 || z === 23);
                   const isNorthGate = isViewingFarm && (x >= 5 && x <= 7) && z === 0;
 
                   // Village Specific Landmarks (48x48)
                   const isSouthGate = !isViewingFarm && (x >= 23 && x <= 25) && z === 47;
 
-                  const isPerimeterTree = x === 0 || x === gridWidth - 1 || z === 0 || z === gridHeight - 1;
+                  const isPerimeterTree = !isViewingHouse && (x === 0 || x === gridWidth - 1 || z === 0 || z === gridHeight - 1);
+                  const isInteriorWall = isViewingHouse && (x === 0 || x === gridWidth - 1 || z === 0 || (z === gridHeight - 1 && (x < 4 || x > 6)));
                   const isPlayer = isPlayerOnThisMap && playerGridPos.x === x && playerGridPos.z === z;
 
-                  let cellColor = '#2e7d32'; // grass
+                  let cellColor = isViewingHouse ? '#92400e' : currentViewLocation === 'mountain' ? '#475569' : currentViewLocation === 'coast' ? '#e2b170' : '#2e7d32'; // base
                   if (isWater) cellColor = '#0284c7'; // canal or lake
-                  else if (isPath) cellColor = '#d97706'; // orange path
+                  else if (isPath) cellColor = currentViewLocation === 'mountain' ? '#78716c' : '#d97706'; // path
+                  else if (isStone) cellColor = '#64748b'; // stone
+                  else if (isLog) cellColor = '#78350f'; // log
+                  else if (isBuilding) cellColor = '#b45309'; // building
                   else if (isBridge) cellColor = '#8d5b4c'; // wooden bridge
                   else if (isNorthGate) cellColor = '#9333ea'; // purple gate to village
                   else if (isSouthGate) cellColor = '#16a34a'; // green gate to farm
@@ -278,6 +311,7 @@ export const BigMapModal: React.FC<BigMapModalProps> = ({
                   else if (tile?.debris === 'wild_tree') cellColor = '#15803d'; // pohon liar
                   else if (isSoil) cellColor = tile?.isWatered ? '#3e2723' : '#6d4c41';
                   else if (isPerimeterTree) cellColor = '#14532d'; // perimeter forest
+                  else if (isInteriorWall) cellColor = '#451a03'; // interior wall
 
                   return (
                     <div

@@ -31,48 +31,323 @@ function getCachedGeometry(key: string, factory: () => THREE.BufferGeometry): TH
   return geo;
 }
 
+// --- Procedural High-Fidelity Textures for Farmhouse & Debris (Studio Ghibli / Story of Seasons Style) ---
+
+// 1. Concentric Annual Tree Growth Rings (Penampang Lingkaran Tahun Kayu)
+let logEndTexture: THREE.CanvasTexture | null = null;
+function getLogEndTexture(): THREE.CanvasTexture {
+  if (logEndTexture) return logEndTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Outer dark bark ring
+  ctx.fillStyle = '#3e2723';
+  ctx.beginPath();
+  ctx.arc(128, 128, 126, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inner warm sapwood base
+  const woodGrad = ctx.createRadialGradient(128, 128, 10, 128, 128, 116);
+  woodGrad.addColorStop(0, '#c7a379');
+  woodGrad.addColorStop(0.35, '#d8b994');
+  woodGrad.addColorStop(0.78, '#b89269');
+  woodGrad.addColorStop(1, '#8d633d');
+  ctx.fillStyle = woodGrad;
+  ctx.beginPath();
+  ctx.arc(128, 128, 116, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Concentric annual growth rings
+  ctx.lineWidth = 1.6;
+  for (let r = 18; r < 114; r += 7.5) {
+    ctx.strokeStyle = `rgba(107, 68, 38, ${0.45 + (r % 15 === 0 ? 0.3 : 0)})`;
+    ctx.beginPath();
+    const steps = 40;
+    for (let i = 0; i <= steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      const wobble = Math.sin(angle * 5 + r) * 1.8 + Math.cos(angle * 3) * 1.2;
+      const x = 128 + Math.cos(angle) * (r + wobble);
+      const y = 128 + Math.sin(angle) * (r + wobble);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // Heartwood center & radial drying micro-cracks
+  ctx.fillStyle = '#8b5a2b';
+  ctx.beginPath();
+  ctx.arc(128, 128, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#5a3818';
+  ctx.lineWidth = 1.8;
+  const crackAngles = [0.4, 2.1, 4.3];
+  crackAngles.forEach((ang) => {
+    ctx.beginPath();
+    ctx.moveTo(128, 128);
+    ctx.lineTo(128 + Math.cos(ang) * 95, 128 + Math.sin(ang) * 95);
+    ctx.stroke();
+  });
+
+  logEndTexture = new THREE.CanvasTexture(canvas);
+  logEndTexture.colorSpace = THREE.SRGBColorSpace;
+  return logEndTexture;
+}
+
+// 2. Log Bark Texture with subtle green moss patches
+let logBarkTexture: THREE.CanvasTexture | null = null;
+function getLogBarkTexture(): THREE.CanvasTexture {
+  if (logBarkTexture) return logBarkTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#653e28';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Bark grain furrows
+  for (let x = 0; x < 256; x += 4) {
+    const isDeep = x % 16 === 0;
+    ctx.fillStyle = isDeep ? 'rgba(40, 20, 10, 0.65)' : 'rgba(140, 90, 55, 0.4)';
+    ctx.fillRect(x, 0, isDeep ? 2.5 : 1.5, 256);
+  }
+
+  // Soft patches of green moss on top of the log
+  for (let m = 0; m < 35; m++) {
+    const mx = Math.random() * 256;
+    const my = Math.random() * 120;
+    const rad = 6 + Math.random() * 16;
+    const mossGrad = ctx.createRadialGradient(mx, my, 2, mx, my, rad);
+    mossGrad.addColorStop(0, 'rgba(101, 163, 13, 0.7)');
+    mossGrad.addColorStop(1, 'rgba(77, 124, 15, 0)');
+    ctx.fillStyle = mossGrad;
+    ctx.beginPath();
+    ctx.arc(mx, my, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  logBarkTexture = new THREE.CanvasTexture(canvas);
+  logBarkTexture.wrapS = THREE.RepeatWrapping;
+  logBarkTexture.wrapT = THREE.RepeatWrapping;
+  logBarkTexture.colorSpace = THREE.SRGBColorSpace;
+  return logBarkTexture;
+}
+
+// 3. Mossy Weathered River Boulder Texture
+let mossyBoulderTexture: THREE.CanvasTexture | null = null;
+function getMossyBoulderTexture(): THREE.CanvasTexture {
+  if (mossyBoulderTexture) return mossyBoulderTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // Natural river stone grey base with subtle warm tone
+  const baseGrad = ctx.createLinearGradient(0, 0, 512, 512);
+  baseGrad.addColorStop(0, '#a8a29e');
+  baseGrad.addColorStop(0.5, '#78716c');
+  baseGrad.addColorStop(1, '#57534e');
+  ctx.fillStyle = baseGrad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Weathered stone grain & flecks
+  for (let i = 0; i < 900; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const size = 1.0 + Math.random() * 3.0;
+    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(231, 229, 228, 0.25)' : 'rgba(41, 37, 36, 0.35)';
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Organic Ghibli Moss Patches (Vibrant lime & forest greens)
+  const mossPatches = [
+    { x: 180, y: 140, r: 120, col: '#65a30d' },
+    { x: 320, y: 160, r: 140, col: '#84cc16' },
+    { x: 120, y: 280, r: 90, col: '#4d7c0f' },
+    { x: 380, y: 320, r: 110, col: '#65a30d' },
+    { x: 260, y: 220, r: 130, col: '#84cc16' },
+    { x: 240, y: 90, r: 80, col: '#a3e635' },
+  ];
+
+  mossPatches.forEach((p) => {
+    const mGrad = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, p.r);
+    mGrad.addColorStop(0, p.col);
+    mGrad.addColorStop(0.7, 'rgba(77, 124, 15, 0.7)');
+    mGrad.addColorStop(1, 'rgba(54, 83, 20, 0)');
+    ctx.fillStyle = mGrad;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // White Lichen Clusters
+  for (let l = 0; l < 40; l++) {
+    const lx = Math.random() * 512;
+    const ly = Math.random() * 512;
+    const lr = 3 + Math.random() * 8;
+    ctx.fillStyle = 'rgba(241, 245, 249, 0.45)';
+    ctx.beginPath();
+    ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Fine stone fissures
+  ctx.strokeStyle = 'rgba(41, 37, 36, 0.55)';
+  ctx.lineWidth = 1.4;
+  for (let c = 0; c < 5; c++) {
+    let cx = 100 + Math.random() * 312;
+    let cy = 100 + Math.random() * 312;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    for (let s = 0; s < 4; s++) {
+      cx += (Math.random() - 0.5) * 45;
+      cy += (Math.random() - 0.5) * 45;
+      ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+  }
+
+  mossyBoulderTexture = new THREE.CanvasTexture(canvas);
+  mossyBoulderTexture.colorSpace = THREE.SRGBColorSpace;
+  return mossyBoulderTexture;
+}
+
+// 4. Layered Terracotta Shingle Roof Texture
+let roofShingleTexture: THREE.CanvasTexture | null = null;
+function getRoofShingleTexture(): THREE.CanvasTexture {
+  if (roofShingleTexture) return roofShingleTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#b91c1c';
+  ctx.fillRect(0, 0, 512, 512);
+
+  const rowCount = 8;
+  const rowH = 512 / rowCount;
+
+  for (let r = 0; r < rowCount; r++) {
+    const y = r * rowH;
+    const rGrad = ctx.createLinearGradient(0, y, 0, y + rowH);
+    rGrad.addColorStop(0, '#ea580c'); // Sunlit terracotta orange
+    rGrad.addColorStop(0.65, '#c2410c');
+    rGrad.addColorStop(0.88, '#9a3412');
+    rGrad.addColorStop(1, '#451a03'); // Shingle overlap shadow
+    ctx.fillStyle = rGrad;
+    ctx.fillRect(0, y, 512, rowH);
+
+    const shingleW = 42;
+    const offset = (r % 2 === 0) ? 0 : shingleW / 2;
+    ctx.fillStyle = 'rgba(40, 15, 5, 0.45)';
+    for (let x = offset; x < 512; x += shingleW) {
+      ctx.fillRect(x, y + 4, 2, rowH - 4);
+    }
+  }
+
+  roofShingleTexture = new THREE.CanvasTexture(canvas);
+  roofShingleTexture.wrapS = THREE.RepeatWrapping;
+  roofShingleTexture.wrapT = THREE.RepeatWrapping;
+  roofShingleTexture.repeat.set(1.5, 1.5);
+  roofShingleTexture.colorSpace = THREE.SRGBColorSpace;
+  return roofShingleTexture;
+}
+
 export class ModelFactory {
-  // --- PLAYER MODEL ---
+  // --- PLAYER MODEL (Anime Ghibli Farmer Boy matching Image 1) ---
   public static createPlayer(palette: TexturePackPalette): THREE.Group {
     const group = new THREE.Group();
     group.name = 'player';
 
-    // Soft Contact Drop Shadow
-    const shadowMat = getCachedMaterial('#000000', 1, 0);
+    // Soft Directional Drop Shadow (offset towards bottom-right matching top-left sun)
+    const shadowMat = getCachedMaterial('#071207', 1, 0);
     shadowMat.transparent = true;
-    shadowMat.opacity = 0.35;
-    const shadowGeo = getCachedGeometry('player_shadow', () => new THREE.CircleGeometry(0.38, 12));
+    shadowMat.opacity = 0.40;
+    const shadowGeo = getCachedGeometry('player_shadow_v3', () => new THREE.PlaneGeometry(0.55, 0.42));
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.01;
+    shadow.position.set(0.10, 0.015, 0.12);
     group.add(shadow);
 
-    // Boots
-    const bootMat = getCachedMaterial('#332211');
-    const bootGeo = getCachedGeometry('player_boots', () => new THREE.BoxGeometry(0.24, 0.15, 0.32));
+    // Boots (Dark Leather Boots)
+    const bootMat = getCachedMaterial('#451a03');
+    const bootGeo = getCachedGeometry('player_boots_v3', () => new THREE.BoxGeometry(0.24, 0.16, 0.30));
     const boots = new THREE.Mesh(bootGeo, bootMat);
     boots.position.y = 0.08;
     group.add(boots);
 
-    // Body / Overalls / Blue Jeans & Vest
-    const bodyMat = getCachedMaterial('#1e3a8a');
-    const bodyGeo = getCachedGeometry('player_body_v2', () => new THREE.CylinderGeometry(0.24, 0.22, 0.52, 8));
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.42;
-    group.add(body);
+    // Dark Brown Work Trousers
+    const pantsMat = getCachedMaterial('#3f2010');
+    const pantsGeo = getCachedGeometry('player_pants_v3', () => new THREE.CylinderGeometry(0.23, 0.21, 0.22, 8));
+    const pants = new THREE.Mesh(pantsGeo, pantsMat);
+    pants.position.y = 0.24;
+    group.add(pants);
 
-    // Shirt Arms
-    const shirtMat = getCachedMaterial('#dc2626');
-    const armGeo = getCachedGeometry('player_arm', () => new THREE.BoxGeometry(0.12, 0.32, 0.12));
-    const armL = new THREE.Mesh(armGeo, shirtMat);
-    armL.position.set(-0.24, 0.45, 0);
+    // Royal Cobalt Blue Farmer Tunic (as in Image 1)
+    const tunicMat = getCachedMaterial('#2563eb');
+    const tunicGeo = getCachedGeometry('player_tunic_v3', () => new THREE.CylinderGeometry(0.25, 0.23, 0.40, 8));
+    const tunic = new THREE.Mesh(tunicGeo, tunicMat);
+    tunic.position.y = 0.48;
+    group.add(tunic);
+
+    // Leather Waist Belt with Brass Buckle
+    const beltMat = getCachedMaterial('#2d1500');
+    const beltGeo = getCachedGeometry('player_belt_v3', () => new THREE.CylinderGeometry(0.255, 0.255, 0.06, 8));
+    const belt = new THREE.Mesh(beltGeo, beltMat);
+    belt.position.y = 0.35;
+    group.add(belt);
+
+    const buckleMat = getCachedMaterial('#f59e0b');
+    const buckleGeo = getCachedGeometry('player_belt_buckle_v3', () => new THREE.BoxGeometry(0.08, 0.07, 0.05));
+    const buckle = new THREE.Mesh(buckleGeo, buckleMat);
+    buckle.position.set(0, 0.35, 0.25);
+    group.add(buckle);
+
+    // Matching Blue Sleeves & Arms
+    const sleeveMat = getCachedMaterial('#1d4ed8');
+    const skinMat = getCachedMaterial('#fed7aa');
+    const armGeo = getCachedGeometry('player_arm_v3', () => new THREE.BoxGeometry(0.12, 0.26, 0.12));
+    const handGeo = getCachedGeometry('player_hand_v3', () => new THREE.SphereGeometry(0.065, 6, 6));
+
+    const armL = new THREE.Mesh(armGeo, sleeveMat);
+    armL.position.set(-0.25, 0.46, 0);
     group.add(armL);
-    const armR = new THREE.Mesh(armGeo, shirtMat);
-    armR.position.set(0.24, 0.45, 0);
+    const handL = new THREE.Mesh(handGeo, skinMat);
+    handL.position.set(-0.25, 0.30, 0);
+    group.add(handL);
+
+    const armR = new THREE.Mesh(armGeo, sleeveMat);
+    armR.position.set(0.25, 0.46, 0);
     group.add(armR);
+    const handR = new THREE.Mesh(handGeo, skinMat);
+    handR.position.set(0.25, 0.30, 0);
+    group.add(handR);
+
+    // Leather Adventure Satchel / Backpack on Back (matching Image 1)
+    const packMat = getCachedMaterial('#9a3412');
+    const packGeo = getCachedGeometry('player_pack_body', () => new THREE.BoxGeometry(0.26, 0.30, 0.14));
+    const pack = new THREE.Mesh(packGeo, packMat);
+    pack.position.set(0, 0.48, -0.16);
+    group.add(pack);
+
+    const flapGeo = getCachedGeometry('player_pack_flap_v3', () => new THREE.BoxGeometry(0.27, 0.12, 0.15));
+    const flap = new THREE.Mesh(flapGeo, packMat);
+    flap.position.set(0, 0.58, -0.16);
+    group.add(flap);
+
+    const packBuckleGeo = getCachedGeometry('player_pack_buckle_v3', () => new THREE.BoxGeometry(0.06, 0.06, 0.03));
+    const packBuckle = new THREE.Mesh(packBuckleGeo, buckleMat);
+    packBuckle.position.set(0, 0.47, -0.24);
+    group.add(packBuckle);
 
     // Head
-    const skinMat = getCachedMaterial('#fed7aa'); // Natural healthy skin tone
     const headGeo = getCachedGeometry('player_head_v3', () => new THREE.SphereGeometry(0.24, 12, 12));
     const head = new THREE.Mesh(headGeo, skinMat);
     head.position.y = 0.82;
@@ -139,62 +414,207 @@ export class ModelFactory {
     return group;
   }
 
-  // --- FARMHOUSE ---
+  // --- FARMHOUSE (Artisan Rustic Farmhouse with Terracotta Tiled Roof & Timber Frame) ---
   public static createFarmhouse(palette: TexturePackPalette): THREE.Group {
     const house = new THREE.Group();
 
-    // Soft Contact Base Shadow
-    const shadowMat = getCachedMaterial('#000000', 1, 0);
-    shadowMat.transparent = true;
-    shadowMat.opacity = 0.35;
-    const shadowGeo = getCachedGeometry('house_shadow', () => new THREE.PlaneGeometry(3.6, 3.6));
+    // 1. Soft Contact Base Drop Shadow
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x071207,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+    });
+    const shadowGeo = getCachedGeometry('house_shadow_v3', () => new THREE.PlaneGeometry(4.2, 3.6));
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.01;
+    shadow.position.set(0, 0.015, 0.1);
     house.add(shadow);
 
-    // Stone Foundation Base Trim
-    const stoneBaseMat = getCachedMaterial('#64748b');
-    const stoneBaseGeo = getCachedGeometry('house_stone_base', () => new THREE.BoxGeometry(2.7, 0.4, 2.7));
+    // 2. Stone Foundation Base Plinth
+    const stoneBaseMat = getCachedMaterial('#57534e');
+    const stoneBaseGeo = getCachedGeometry('house_stone_base_v3', () => new THREE.BoxGeometry(3.3, 0.45, 2.7));
     const stoneBase = new THREE.Mesh(stoneBaseGeo, stoneBaseMat);
-    stoneBase.position.y = 0.2;
+    stoneBase.position.y = 0.225;
     house.add(stoneBase);
 
-    // Timber Log Walls
-    const wallMat = getCachedMaterial('#b45309');
-    const wallGeo = getCachedGeometry('house_wall_timber', () => new THREE.BoxGeometry(2.5, 1.5, 2.5));
+    // 3. Timber Log Clapboard Siding Walls
+    const wallMat = getCachedMaterial('#9a522c');
+    const wallGeo = getCachedGeometry('house_wall_timber_v3', () => new THREE.BoxGeometry(3.1, 1.55, 2.5));
     const walls = new THREE.Mesh(wallGeo, wallMat);
-    walls.position.y = 1.15;
+    walls.position.y = 1.22;
     house.add(walls);
 
-    // Red Roof Tiles (Overhang Gable Roof)
-    const roofMat = getCachedMaterial('#b91c1c');
-    const roofGeo = getCachedGeometry('house_roof_gable', () => new THREE.ConeGeometry(2.4, 1.3, 4));
-    const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.position.y = 2.45;
-    roof.rotation.y = Math.PI / 4;
-    house.add(roof);
+    // 4. Vertical Corner Posts & Trim Beams (Balok Sudut Kayu Jati)
+    const timberPostMat = getCachedMaterial('#451a03');
+    const postGeo = getCachedGeometry('house_corner_post', () => new THREE.BoxGeometry(0.18, 1.6, 0.18));
+    const postPositions = [
+      [-1.52, 1.25, -1.22],
+      [ 1.52, 1.25, -1.22],
+      [-1.52, 1.25,  1.22],
+      [ 1.52, 1.25,  1.22],
+    ];
+    postPositions.forEach(([px, py, pz]) => {
+      const post = new THREE.Mesh(postGeo, timberPostMat);
+      post.position.set(px, py, pz);
+      house.add(post);
+    });
 
-    // Wooden Door with Frame
-    const doorMat = getCachedMaterial('#451a03');
-    const doorGeo = getCachedGeometry('house_door_v2', () => new THREE.BoxGeometry(0.7, 1.1, 0.12));
+    // Horizontal Beam Trim (Pemisah Dinding)
+    const beamGeo = getCachedGeometry('house_mid_beam', () => new THREE.BoxGeometry(3.18, 0.12, 2.58));
+    const midBeam = new THREE.Mesh(beamGeo, timberPostMat);
+    midBeam.position.y = 1.95;
+    house.add(midBeam);
+
+    // 5. Classic Pitched Terracotta Clay Shingle Gable Roof (Atap Pelana Genteng Estetik)
+    const shingleMat = new THREE.MeshLambertMaterial({
+      map: getRoofShingleTexture(),
+      color: 0xffffff,
+    });
+
+    // Front Slope (facing +Z)
+    const roofSlopeGeo = getCachedGeometry('house_roof_slope', () => new THREE.BoxGeometry(3.5, 0.12, 1.7));
+    const frontRoof = new THREE.Mesh(roofSlopeGeo, shingleMat);
+    frontRoof.position.set(0, 2.45, 0.65);
+    frontRoof.rotation.x = Math.PI * 0.19;
+    house.add(frontRoof);
+
+    // Back Slope (facing -Z)
+    const backRoof = new THREE.Mesh(roofSlopeGeo, shingleMat);
+    backRoof.position.set(0, 2.45, -0.65);
+    backRoof.rotation.x = -Math.PI * 0.19;
+    house.add(backRoof);
+
+    // Ridge Beam Peak (Balok Bubungan Atap)
+    const ridgeGeo = getCachedGeometry('house_roof_ridge', () => new THREE.BoxGeometry(3.6, 0.16, 0.16));
+    const ridge = new THREE.Mesh(ridgeGeo, timberPostMat);
+    ridge.position.set(0, 2.88, 0);
+    house.add(ridge);
+
+    // Triangular Gable Wall Fills (Dinding Segitiga Bawah Atap)
+    const gableMat = getCachedMaterial('#854122');
+    const gableGeo = getCachedGeometry('house_gable_tri', () => {
+      const geom = new THREE.ConeGeometry(1.35, 0.9, 3);
+      geom.rotateY(Math.PI / 2);
+      return geom;
+    });
+    const gableL = new THREE.Mesh(gableGeo, gableMat);
+    gableL.scale.set(1.0, 1.0, 0.08);
+    gableL.position.set(-1.54, 2.42, 0);
+    house.add(gableL);
+
+    const gableR = new THREE.Mesh(gableGeo, gableMat);
+    gableR.scale.set(1.0, 1.0, 0.08);
+    gableR.position.set(1.54, 2.42, 0);
+    house.add(gableR);
+
+    // Attic Round Window on East Gable
+    const atticWinMat = getCachedMaterial('#bae6fd');
+    const atticWinGeo = getCachedGeometry('house_attic_win', () => new THREE.CylinderGeometry(0.18, 0.18, 0.1, 8));
+    const atticWin = new THREE.Mesh(atticWinGeo, atticWinMat);
+    atticWin.rotation.z = Math.PI / 2;
+    atticWin.position.set(1.55, 2.45, 0);
+    house.add(atticWin);
+
+    // 6. Solid Wooden Door with Handle & Stone Step
+    const doorMat = getCachedMaterial('#3f1d0b');
+    const doorGeo = getCachedGeometry('house_door_v3', () => new THREE.BoxGeometry(0.65, 1.15, 0.08));
     const door = new THREE.Mesh(doorGeo, doorMat);
-    door.position.set(0, 0.75, 1.26);
+    door.position.set(-0.35, 0.85, 1.28);
     house.add(door);
 
-    // Warm Glowing Window
-    const winMat = getCachedMaterial('#fef08a');
-    const winGeo = getCachedGeometry('house_win_v2', () => new THREE.BoxGeometry(0.55, 0.55, 0.12));
-    const win = new THREE.Mesh(winGeo, winMat);
-    win.position.set(0.7, 1.25, 1.26);
-    house.add(win);
+    const doorHandleMat = getCachedMaterial('#f59e0b');
+    const doorHandleGeo = getCachedGeometry('house_door_handle', () => new THREE.SphereGeometry(0.04, 6, 6));
+    const doorHandle = new THREE.Mesh(doorHandleGeo, doorHandleMat);
+    doorHandle.position.set(-0.15, 0.85, 1.34);
+    house.add(doorHandle);
 
-    // Stone Chimney with Cap
+    const stepMat = getCachedMaterial('#78716c');
+    const stepGeo = getCachedGeometry('house_door_step', () => new THREE.BoxGeometry(0.85, 0.14, 0.4));
+    const step = new THREE.Mesh(stepGeo, stepMat);
+    step.position.set(-0.35, 0.07, 1.45);
+    house.add(step);
+
+    // 7. Artisan Windows with Frames & Flower Box Planter
+    const frameMat = getCachedMaterial('#fef08a');
+    const glassMat = getCachedMaterial('#7dd3fc');
+
+    // Front Window
+    const winFrameGeo = getCachedGeometry('house_win_frame', () => new THREE.BoxGeometry(0.65, 0.65, 0.08));
+    const winFrame = new THREE.Mesh(winFrameGeo, frameMat);
+    winFrame.position.set(0.75, 1.3, 1.28);
+    house.add(winFrame);
+
+    const winGlassGeo = getCachedGeometry('house_win_glass', () => new THREE.BoxGeometry(0.55, 0.55, 0.09));
+    const winGlass = new THREE.Mesh(winGlassGeo, glassMat);
+    winGlass.position.set(0.75, 1.3, 1.285);
+    house.add(winGlass);
+
+    // Flower Box under Front Window
+    const planterMat = getCachedMaterial('#5c2e14');
+    const planterGeo = getCachedGeometry('house_planter', () => new THREE.BoxGeometry(0.75, 0.16, 0.22));
+    const planter = new THREE.Mesh(planterGeo, planterMat);
+    planter.position.set(0.75, 0.94, 1.35);
+    house.add(planter);
+
+    const flowerColors = ['#f43f5e', '#fbbf24', '#ffffff', '#38bdf8'];
+    for (let f = 0; f < 5; f++) {
+      const flMat = getCachedMaterial(flowerColors[f % flowerColors.length]);
+      const flGeo = getCachedGeometry('house_flower_bloom', () => new THREE.DodecahedronGeometry(0.045));
+      const fl = new THREE.Mesh(flGeo, flMat);
+      fl.position.set(0.48 + f * 0.13, 1.05, 1.35);
+      house.add(fl);
+    }
+
+    // 8. Stone Chimney with Terracotta Pot Cap
     const chimMat = getCachedMaterial('#475569');
-    const chimGeo = getCachedGeometry('house_chim_v2', () => new THREE.BoxGeometry(0.45, 1.2, 0.45));
+    const chimGeo = getCachedGeometry('house_chim_v3', () => new THREE.BoxGeometry(0.45, 1.35, 0.45));
     const chim = new THREE.Mesh(chimGeo, chimMat);
-    chim.position.set(-0.75, 2.2, -0.5);
+    chim.position.set(-0.85, 2.5, -0.45);
     house.add(chim);
+
+    const potMat = getCachedMaterial('#ea580c');
+    const potGeo = getCachedGeometry('house_chim_pot', () => new THREE.CylinderGeometry(0.14, 0.12, 0.3, 6));
+    const pot = new THREE.Mesh(potGeo, potMat);
+    pot.position.set(-0.85, 3.25, -0.45);
+    house.add(pot);
+
+    // 9. Side Props: Firewood Stack (Tumpukan Kayu Bakar) & Water Barrel
+    const logBarkM = new THREE.MeshLambertMaterial({ map: getLogBarkTexture(), color: 0xffffff });
+    const logEndM = new THREE.MeshLambertMaterial({ map: getLogEndTexture(), color: 0xffffff });
+    const woodLogGeo = getCachedGeometry('house_prop_log', () => new THREE.CylinderGeometry(0.1, 0.1, 0.65, 6));
+
+    const firewoodPositions = [
+      [1.65, 0.1, -0.4],
+      [1.65, 0.1, -0.15],
+      [1.65, 0.26, -0.28],
+    ];
+    firewoodPositions.forEach(([fx, fy, fz]) => {
+      const pLog = new THREE.Mesh(woodLogGeo, logBarkM);
+      pLog.rotation.z = Math.PI / 2;
+      pLog.position.set(fx, fy, fz);
+      house.add(pLog);
+
+      const endMesh = new THREE.Mesh(getCachedGeometry('prop_log_end', () => new THREE.CircleGeometry(0.095, 6)), logEndM);
+      endMesh.position.set(fx, fy, fz + 0.33);
+      house.add(endMesh);
+    });
+
+    // Rain Water Barrel
+    const barrelMat = getCachedMaterial('#451a03');
+    const barrelGeo = getCachedGeometry('house_water_barrel', () => new THREE.CylinderGeometry(0.24, 0.22, 0.55, 8));
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(-1.62, 0.28, 0.85);
+    house.add(barrel);
+
+    const hoopMat = getCachedMaterial('#1e293b');
+    const hoopGeo = getCachedGeometry('barrel_hoop', () => new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8));
+    const hoop1 = new THREE.Mesh(hoopGeo, hoopMat);
+    hoop1.position.set(-1.62, 0.38, 0.85);
+    house.add(hoop1);
+    const hoop2 = new THREE.Mesh(hoopGeo, hoopMat);
+    hoop2.position.set(-1.62, 0.18, 0.85);
+    house.add(hoop2);
 
     return house;
   }
@@ -236,29 +656,127 @@ export class ModelFactory {
     return group;
   }
 
-  // --- WOODEN BRIDGE ---
+  // --- BEAUTIFUL ARCHED WOODEN RIVER BRIDGE ---
   public static createWoodenBridge(): THREE.Group {
     const bridge = new THREE.Group();
     bridge.name = 'wooden_bridge';
 
-    const woodMat = getCachedMaterial('#8d5b4c');
-    const darkWoodMat = getCachedMaterial('#5c382e');
+    const woodPlankMat1 = getCachedMaterial('#8d5b4c');
+    const woodPlankMat2 = getCachedMaterial('#966050');
+    const woodPlankMat3 = getCachedMaterial('#7d4e3f');
+    const darkWoodMat = getCachedMaterial('#4a2e25');
+    const stoneBaseMat = getCachedMaterial('#78716c');
+    const brassMat = getCachedMaterial('#d97706', 0.4, 0.6);
+    const lanternGlowMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
 
-    // Planks Deck
-    const deckGeo = getCachedGeometry('bridge_deck', () => new THREE.BoxGeometry(1.24, 0.12, 1.24));
-    const deck = new THREE.Mesh(deckGeo, woodMat);
-    deck.position.y = 0.08;
-    bridge.add(deck);
+    // 1. Stone Foundation Ramps on Riverbanks (North Z = -1.22, South Z = +1.22)
+    const stoneGeo = getCachedGeometry('bridge_stone_abutment', () => new THREE.BoxGeometry(1.48, 0.22, 0.45));
+    const stoneNorth = new THREE.Mesh(stoneGeo, stoneBaseMat);
+    stoneNorth.position.set(0, 0.04, -1.22);
+    bridge.add(stoneNorth);
 
-    // Left & Right Handrails
-    const railGeo = getCachedGeometry('bridge_rail', () => new THREE.BoxGeometry(0.1, 0.25, 1.24));
-    const railL = new THREE.Mesh(railGeo, darkWoodMat);
-    railL.position.set(-0.55, 0.24, 0);
-    bridge.add(railL);
+    const stoneSouth = new THREE.Mesh(stoneGeo, stoneBaseMat);
+    stoneSouth.position.set(0, 0.04, 1.22);
+    bridge.add(stoneSouth);
 
-    const railR = new THREE.Mesh(railGeo, darkWoodMat);
-    railR.position.set(0.55, 0.24, 0);
-    bridge.add(railR);
+    // 2. Heavy Timber Support Piles Under Bridge in Riverbed
+    const pileGeo = getCachedGeometry('bridge_pile', () => new THREE.CylinderGeometry(0.08, 0.09, 0.55, 6));
+    const crossbeamGeo = getCachedGeometry('bridge_crossbeam', () => new THREE.BoxGeometry(1.36, 0.10, 0.12));
+
+    const pilePositions = [
+      { x: -0.58, z: -0.65 },
+      { x: 0.58, z: -0.65 },
+      { x: -0.58, z: 0.65 },
+      { x: 0.58, z: 0.65 },
+    ];
+    pilePositions.forEach((pos) => {
+      const pile = new THREE.Mesh(pileGeo, darkWoodMat);
+      pile.position.set(pos.x, -0.06, pos.z);
+      bridge.add(pile);
+    });
+
+    const beamN = new THREE.Mesh(crossbeamGeo, darkWoodMat);
+    beamN.position.set(0, 0.04, -0.65);
+    bridge.add(beamN);
+
+    const beamS = new THREE.Mesh(crossbeamGeo, darkWoodMat);
+    beamS.position.set(0, 0.04, 0.65);
+    bridge.add(beamS);
+
+    // 3. Arched Timber Planks Deck (11 Individual Rustic Planks spanning from Z = -1.1 to +1.1)
+    const plankWidth = 1.38;
+    const plankThickness = 0.07;
+    const plankLength = 0.18;
+    const plankGeo = getCachedGeometry('bridge_deck_plank', () => new THREE.BoxGeometry(plankWidth, plankThickness, plankLength));
+    const numPlanks = 11;
+
+    for (let i = 0; i < numPlanks; i++) {
+      const t = (i / (numPlanks - 1)) * 2 - 1; // from -1 to +1
+      const pz = t * 1.08;
+      // Gentle arch: highest in the center (Y = 0.16), tapering to Y = 0.08 at ends
+      const py = 0.08 + Math.cos(t * Math.PI * 0.5) * 0.07;
+      // Slight pitch tilt following the arch curvature
+      const rotX = -Math.sin(t * Math.PI * 0.5) * 0.08;
+
+      const mat = i % 3 === 0 ? woodPlankMat1 : (i % 3 === 1 ? woodPlankMat2 : woodPlankMat3);
+      const plank = new THREE.Mesh(plankGeo, mat);
+      plank.position.set(0, py, pz);
+      plank.rotation.x = rotX;
+      bridge.add(plank);
+    }
+
+    // 4. Sturdy Handrail Posts (6 upright posts: 3 on West, 3 on East)
+    const postGeo = getCachedGeometry('bridge_rail_post', () => new THREE.BoxGeometry(0.11, 0.54, 0.11));
+    const postCapGeo = getCachedGeometry('bridge_post_cap', () => new THREE.ConeGeometry(0.09, 0.08, 4));
+
+    const postZs = [-1.08, 0, 1.08];
+    const sideXs = [-0.64, 0.64];
+
+    sideXs.forEach((px) => {
+      postZs.forEach((pz) => {
+        const archY = 0.08 + Math.cos((pz / 1.08) * Math.PI * 0.5) * 0.07;
+        const post = new THREE.Mesh(postGeo, darkWoodMat);
+        post.position.set(px, archY + 0.24, pz);
+        bridge.add(post);
+
+        const cap = new THREE.Mesh(postCapGeo, darkWoodMat);
+        cap.position.set(px, archY + 0.52, pz);
+        cap.rotation.y = Math.PI / 4;
+        bridge.add(cap);
+      });
+    });
+
+    // 5. Dual Longitudinal Curved Handrails
+    const railTopGeo = getCachedGeometry('bridge_rail_top', () => new THREE.BoxGeometry(0.08, 0.08, 2.36));
+    const railMidGeo = getCachedGeometry('bridge_rail_mid', () => new THREE.BoxGeometry(0.06, 0.06, 2.36));
+
+    sideXs.forEach((px) => {
+      const topRail = new THREE.Mesh(railTopGeo, darkWoodMat);
+      topRail.position.set(px, 0.50, 0);
+      bridge.add(topRail);
+
+      const midRail = new THREE.Mesh(railMidGeo, woodPlankMat1);
+      midRail.position.set(px, 0.32, 0);
+      bridge.add(midRail);
+    });
+
+    // 6. Cozy Warm Lanterns on Entrance Posts
+    const lanternGeo = getCachedGeometry('bridge_lantern_box', () => new THREE.BoxGeometry(0.12, 0.16, 0.12));
+    const lanternGlowGeo = getCachedGeometry('bridge_lantern_glow', () => new THREE.SphereGeometry(0.05, 6, 6));
+
+    const lanternSpawns = [
+      { x: -0.64, z: -1.08 },
+      { x: 0.64, z: 1.08 },
+    ];
+    lanternSpawns.forEach((lp) => {
+      const lanternBox = new THREE.Mesh(lanternGeo, brassMat);
+      lanternBox.position.set(lp.x, 0.56, lp.z);
+      bridge.add(lanternBox);
+
+      const glow = new THREE.Mesh(lanternGlowGeo, lanternGlowMat);
+      glow.position.set(lp.x, 0.56, lp.z);
+      bridge.add(glow);
+    });
 
     return bridge;
   }
@@ -303,86 +821,379 @@ export class ModelFactory {
     return gate;
   }
 
-  // --- CROPS (PADI, JAGUNG, STROBERI, DLL) ---
+  // --- CROPS (Lush Storybook Vegetables matching Image 1: Savoy Cabbage, Carrots, Radishes, Pumpkins) ---
   public static createCrop(cropType: CropType, stage: GrowthStage, palette: TexturePackPalette): THREE.Group {
     const group = new THREE.Group();
     group.name = `crop_${cropType}_${stage}`;
 
-    const stemMat = getCachedMaterial('#4caf50');
-    const scaleFactor = (stage + 1) / 4;
+    // Base Furrowed Soil Ridge Mound
+    const soilMoundMat = getCachedMaterial('#3f1d0b');
+    const moundGeo = getCachedGeometry('crop_soil_mound', () => new THREE.SphereGeometry(0.18, 6, 4));
+    const mound = new THREE.Mesh(moundGeo, soilMoundMat);
+    mound.scale.set(1.2, 0.35, 1.2);
+    mound.position.y = 0.02;
+    group.add(mound);
 
+    // Stage 0: Baby Sprout Seedling
+    if (stage === 0) {
+      const sproutMat = getCachedMaterial('#84cc16');
+      const leafGeo = getCachedGeometry('crop_leaf_sprout', () => new THREE.ConeGeometry(0.045, 0.16, 4));
+      const leafL = new THREE.Mesh(leafGeo, sproutMat);
+      leafL.position.set(-0.045, 0.08, 0);
+      leafL.rotation.z = 0.45;
+      group.add(leafL);
+
+      const leafR = new THREE.Mesh(leafGeo, sproutMat);
+      leafR.position.set(0.045, 0.08, 0);
+      leafR.rotation.z = -0.45;
+      group.add(leafR);
+
+      return group;
+    }
+
+    // Stage 1: Young Growing Plant
+    if (stage === 1) {
+      const youngGreenMat = getCachedMaterial('#4ade80');
+      const shootGeo = getCachedGeometry('crop_shoot_1', () => new THREE.ConeGeometry(0.08, 0.28, 5));
+      for (let i = 0; i < 3; i++) {
+        const ang = (i * Math.PI * 2) / 3;
+        const shoot = new THREE.Mesh(shootGeo, youngGreenMat);
+        shoot.position.set(Math.cos(ang) * 0.06, 0.14, Math.sin(ang) * 0.06);
+        shoot.rotation.set(Math.sin(ang) * 0.25, ang, -Math.cos(ang) * 0.25);
+        group.add(shoot);
+      }
+      return group;
+    }
+
+    // Stage 2 & 3: Rich Volumetric Vegetables
+    const scale = stage === 2 ? 0.72 : 1.0;
+
+    // A. CABBAGE / SAVOY CABBAGE (Leafy Green Vegetables - exactly as seen in front row of Image 1!)
     if (cropType === 'rice' || cropType === 'corn') {
-      const stemGeo = getCachedGeometry(`crop_stem_${scaleFactor}`, () => new THREE.CylinderGeometry(0.04, 0.06, 0.8 * scaleFactor, 4));
-      const stem = new THREE.Mesh(stemGeo, stemMat);
-      stem.position.y = 0.4 * scaleFactor;
-      group.add(stem);
+      const outerLeafMat = getCachedMaterial('#15803d');
+      const midLeafMat = getCachedMaterial('#22c55e');
+      const heartMat = getCachedMaterial('#86efac');
 
-      if (stage === 3) {
-        const itemMat = getCachedMaterial(cropType === 'rice' ? '#ffe082' : '#f1c40f');
-        const grainGeo = getCachedGeometry('crop_grain', () => new THREE.CylinderGeometry(0.08, 0.08, 0.3, 5));
-        const grain = new THREE.Mesh(grainGeo, itemMat);
-        grain.position.set(0, 0.6 * scaleFactor, 0);
-        group.add(grain);
+      // Crinkly Outer Savoy Leaves cupping outward
+      const leafOuterGeo = getCachedGeometry('cabbage_leaf_outer', () => new THREE.DodecahedronGeometry(0.16 * scale));
+      for (let i = 0; i < 6; i++) {
+        const ang = (i * Math.PI * 2) / 6;
+        const leaf = new THREE.Mesh(leafOuterGeo, outerLeafMat);
+        leaf.scale.set(1.2, 0.4, 0.9);
+        leaf.position.set(Math.cos(ang) * 0.16 * scale, 0.08 * scale, Math.sin(ang) * 0.16 * scale);
+        leaf.rotation.set(Math.sin(ang) * 0.4, ang, -Math.cos(ang) * 0.4);
+        group.add(leaf);
       }
-    } else if (cropType === 'strawberry' || cropType === 'tomato') {
-      const bushGeo = getCachedGeometry(`crop_bush_${scaleFactor}`, () => new THREE.DodecahedronGeometry(0.28 * scaleFactor));
-      const bush = new THREE.Mesh(bushGeo, stemMat);
-      bush.position.y = 0.25 * scaleFactor;
-      group.add(bush);
 
-      if (stage === 3) {
-        const fruitMat = getCachedMaterial(cropType === 'strawberry' ? '#e74c3c' : '#ff5722');
-        const fruitGeo = getCachedGeometry('crop_fruit_sphere', () => new THREE.SphereGeometry(0.08, 5, 5));
-        for (let i = 0; i < 3; i++) {
-          const fruit = new THREE.Mesh(fruitGeo, fruitMat);
-          const angle = (i * Math.PI * 2) / 3;
-          fruit.position.set(Math.cos(angle) * 0.2, 0.25, Math.sin(angle) * 0.2);
-          group.add(fruit);
-        }
+      // Mid Leaf Layer
+      for (let i = 0; i < 5; i++) {
+        const ang = (i * Math.PI * 2) / 5 + 0.3;
+        const leaf = new THREE.Mesh(leafOuterGeo, midLeafMat);
+        leaf.scale.set(1.0, 0.5, 0.8);
+        leaf.position.set(Math.cos(ang) * 0.10 * scale, 0.14 * scale, Math.sin(ang) * 0.10 * scale);
+        leaf.rotation.set(Math.sin(ang) * 0.3, ang, -Math.cos(ang) * 0.3);
+        group.add(leaf);
       }
-    } else {
-      const topGeo = getCachedGeometry(`crop_cone_${scaleFactor}`, () => new THREE.ConeGeometry(0.2 * scaleFactor, 0.4 * scaleFactor, 5));
-      const top = new THREE.Mesh(topGeo, stemMat);
-      top.position.y = 0.2 * scaleFactor;
-      group.add(top);
 
+      // Plump Central Cabbage Head (Stage 3 ready harvest)
       if (stage === 3) {
-        const fruitMat = getCachedMaterial(cropType === 'carrot' ? '#e67e22' : '#d35400');
-        const fruitGeo = getCachedGeometry('crop_cone_carrot', () => new THREE.ConeGeometry(0.15, 0.4, 5));
-        const fruit = new THREE.Mesh(fruitGeo, fruitMat);
-        fruit.position.y = 0.1;
-        if (cropType === 'carrot') fruit.rotation.x = Math.PI;
-        group.add(fruit);
+        const headGeo = getCachedGeometry('cabbage_head_core', () => new THREE.DodecahedronGeometry(0.18));
+        const head = new THREE.Mesh(headGeo, heartMat);
+        head.position.set(0, 0.20, 0);
+        group.add(head);
+      }
+    }
+    // B. CARROTS with Lush Feathery Tops & Bright Orange Roots Peeking from Earth (matching Image 1!)
+    else if (cropType === 'carrot') {
+      const fernMat = getCachedMaterial('#15803d');
+      const frondMat = getCachedMaterial('#22c55e');
+      const carrotOrangeMat = getCachedMaterial('#ea580c');
+
+      // Feathery fern tops
+      const fernGeo = getCachedGeometry(`carrot_frond_${scale}`, () => new THREE.ConeGeometry(0.08 * scale, 0.42 * scale, 4));
+      for (let i = 0; i < 5; i++) {
+        const ang = (i * Math.PI * 2) / 5;
+        const fern = new THREE.Mesh(fernGeo, i % 2 === 0 ? fernMat : frondMat);
+        fern.position.set(Math.cos(ang) * 0.08 * scale, 0.24 * scale, Math.sin(ang) * 0.08 * scale);
+        fern.rotation.set(Math.sin(ang) * 0.35, ang, -Math.cos(ang) * 0.35);
+        group.add(fern);
+      }
+
+      // Orange Carrot Shoulder emerging above soil
+      const shoulderGeo = getCachedGeometry('carrot_shoulder', () => new THREE.CylinderGeometry(0.09 * scale, 0.06 * scale, 0.14 * scale, 6));
+      const shoulder = new THREE.Mesh(shoulderGeo, carrotOrangeMat);
+      shoulder.position.set(0, 0.07 * scale, 0);
+      group.add(shoulder);
+    }
+    // C. RADISH / STRAWBERRY / TURNIP with Ruby-Red Bulbs (matching Image 1!)
+    else if (cropType === 'strawberry' || cropType === 'tomato') {
+      const leafMat = getCachedMaterial('#15803d');
+      const bulbMat = getCachedMaterial('#e11d48'); // Ruby red
+
+      // Sprawling green leaves
+      const leafGeo = getCachedGeometry(`radish_leaf_${scale}`, () => new THREE.ConeGeometry(0.10 * scale, 0.32 * scale, 4));
+      for (let i = 0; i < 4; i++) {
+        const ang = (i * Math.PI * 2) / 4;
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+        leaf.position.set(Math.cos(ang) * 0.09 * scale, 0.20 * scale, Math.sin(ang) * 0.09 * scale);
+        leaf.rotation.set(Math.sin(ang) * 0.45, ang, -Math.cos(ang) * 0.45);
+        group.add(leaf);
+      }
+
+      // Plump Ruby Radish / Tomato Fruit
+      if (stage === 3) {
+        const bulbGeo = getCachedGeometry('radish_bulb', () => new THREE.SphereGeometry(0.13, 6, 6));
+        const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+        bulb.position.set(0, 0.10, 0);
+        group.add(bulb);
+      }
+    }
+    // D. PUMPKIN with Golden Orange Ribbed Body & Tendrils
+    else {
+      const vineMat = getCachedMaterial('#15803d');
+      const pumpkinMat = getCachedMaterial('#ea580c');
+      const stemDarkMat = getCachedMaterial('#2d5a27');
+
+      // Broad vine leaves
+      const vineGeo = getCachedGeometry(`pumpkin_vine_${scale}`, () => new THREE.ConeGeometry(0.14 * scale, 0.28 * scale, 4));
+      for (let i = 0; i < 3; i++) {
+        const ang = (i * Math.PI * 2) / 3;
+        const vine = new THREE.Mesh(vineGeo, vineMat);
+        vine.position.set(Math.cos(ang) * 0.14 * scale, 0.12 * scale, Math.sin(ang) * 0.14 * scale);
+        vine.rotation.set(Math.sin(ang) * 0.6, ang, -Math.cos(ang) * 0.6);
+        group.add(vine);
+      }
+
+      // Harvest ready pumpkin
+      if (stage === 3) {
+        const pGeo = getCachedGeometry('pumpkin_body_geo', () => new THREE.SphereGeometry(0.22, 8, 8));
+        const pMesh = new THREE.Mesh(pGeo, pumpkinMat);
+        pMesh.scale.set(1.2, 0.8, 1.2);
+        pMesh.position.set(0, 0.14, 0);
+        group.add(pMesh);
+
+        const stemGeo = getCachedGeometry('pumpkin_stem_geo', () => new THREE.CylinderGeometry(0.03, 0.04, 0.12, 5));
+        const stem = new THREE.Mesh(stemGeo, stemDarkMat);
+        stem.position.set(0, 0.32, 0);
+        group.add(stem);
       }
     }
 
     return group;
   }
 
-  // --- ANIMAL MODELS ---
+  // --- ANIMAL MODELS (Village Hen & Baby Chicks matching Image 1!) ---
   public static createChicken(): THREE.Group {
     const group = new THREE.Group();
-    const whiteMat = getCachedMaterial('#ffffff');
-    const redMat = getCachedMaterial('#e74c3c');
-    const yellowMat = getCachedMaterial('#f1c40f');
 
-    const bodyGeo = getCachedGeometry('chicken_body', () => new THREE.BoxGeometry(0.3, 0.28, 0.35));
-    const body = new THREE.Mesh(bodyGeo, whiteMat);
-    body.position.y = 0.25;
+    // 1. Soft Drop Shadow
+    const shadowMat = getCachedMaterial('#071207', 1, 0);
+    shadowMat.transparent = true;
+    shadowMat.opacity = 0.38;
+    const shadowGeo = getCachedGeometry('chicken_shadow', () => new THREE.PlaneGeometry(0.70, 0.50));
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.set(0.06, 0.015, 0.08);
+    group.add(shadow);
+
+    // 2. MAMA HEN (Warm Russet-Brown Village Hen matching Image 1!)
+    const henMat = getCachedMaterial('#9a3412'); // Rich warm russet brown
+    const wingMat = getCachedMaterial('#7c2d12'); // Darker chestnut wing feathers
+    const tailMat = getCachedMaterial('#451a03'); // Dark tail plume
+    const combMat = getCachedMaterial('#dc2626'); // Vibrant red comb
+    const beakMat = getCachedMaterial('#f59e0b'); // Golden yellow beak
+    const eyeMat = getCachedMaterial('#0f172a');
+
+    // Hen Body (plump rounded hen)
+    const bodyGeo = getCachedGeometry('hen_body_v3', () => new THREE.SphereGeometry(0.20, 8, 8));
+    const body = new THREE.Mesh(bodyGeo, henMat);
+    body.scale.set(1.0, 1.1, 1.3);
+    body.position.set(0, 0.26, 0);
     group.add(body);
 
-    const combGeo = getCachedGeometry('chicken_comb', () => new THREE.BoxGeometry(0.06, 0.1, 0.12));
-    const comb = new THREE.Mesh(combGeo, redMat);
-    comb.position.set(0, 0.43, 0.1);
+    // Hen Wings (folded on sides)
+    const wingGeo = getCachedGeometry('hen_wing_v3', () => new THREE.BoxGeometry(0.06, 0.18, 0.24));
+    const wingL = new THREE.Mesh(wingGeo, wingMat);
+    wingL.position.set(-0.19, 0.28, 0);
+    wingL.rotation.z = 0.1;
+    group.add(wingL);
+
+    const wingR = new THREE.Mesh(wingGeo, wingMat);
+    wingR.position.set(0.19, 0.28, 0);
+    wingR.rotation.z = -0.1;
+    group.add(wingR);
+
+    // Hen Upright Fan Tail
+    const tailGeo = getCachedGeometry('hen_tail_v3', () => new THREE.ConeGeometry(0.10, 0.22, 5));
+    const tail = new THREE.Mesh(tailGeo, tailMat);
+    tail.position.set(0, 0.36, -0.22);
+    tail.rotation.x = -0.65;
+    group.add(tail);
+
+    // Hen Neck & Head
+    const headGeo = getCachedGeometry('hen_head_v3', () => new THREE.SphereGeometry(0.11, 7, 7));
+    const head = new THREE.Mesh(headGeo, henMat);
+    head.position.set(0, 0.44, 0.15);
+    group.add(head);
+
+    // Red Comb on Top of Head
+    const combGeo = getCachedGeometry('hen_comb_v3', () => new THREE.BoxGeometry(0.04, 0.10, 0.14));
+    const comb = new THREE.Mesh(combGeo, combMat);
+    comb.position.set(0, 0.55, 0.14);
     group.add(comb);
 
-    const beakGeo = getCachedGeometry('chicken_beak', () => new THREE.ConeGeometry(0.05, 0.1, 4));
-    const beak = new THREE.Mesh(beakGeo, yellowMat);
-    beak.position.set(0, 0.3, 0.22);
+    // Red Wattle Under Beak
+    const wattleGeo = getCachedGeometry('hen_wattle_v3', () => new THREE.SphereGeometry(0.04, 5, 5));
+    const wattle = new THREE.Mesh(wattleGeo, combMat);
+    wattle.position.set(0, 0.39, 0.24);
+    group.add(wattle);
+
+    // Golden Beak
+    const beakGeo = getCachedGeometry('hen_beak_v3', () => new THREE.ConeGeometry(0.04, 0.10, 4));
+    const beak = new THREE.Mesh(beakGeo, beakMat);
+    beak.position.set(0, 0.43, 0.28);
     beak.rotation.x = Math.PI / 2;
     group.add(beak);
 
+    // Eyes
+    const eyeGeo = getCachedGeometry('hen_eye_v3', () => new THREE.SphereGeometry(0.02, 4, 4));
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.09, 0.46, 0.20);
+    group.add(eyeL);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeR.position.set(0.09, 0.46, 0.20);
+    group.add(eyeR);
+
+    // 3. BABY CHICKS (2 Adorable Yellow Chicks pecking ground as in Image 1!)
+    const chickMat = getCachedMaterial('#facc15'); // Fluffy chick yellow
+    const chickBeakMat = getCachedMaterial('#ea580c');
+    const chickGeo = getCachedGeometry('chick_body_v3', () => new THREE.SphereGeometry(0.075, 6, 6));
+    const chickBeakGeo = getCachedGeometry('chick_beak_v3', () => new THREE.ConeGeometry(0.02, 0.05, 4));
+
+    // Chick 1 (pecking ground in front)
+    const chick1 = new THREE.Mesh(chickGeo, chickMat);
+    chick1.position.set(0.24, 0.08, 0.14);
+    group.add(chick1);
+    const cBeak1 = new THREE.Mesh(chickBeakGeo, chickBeakMat);
+    cBeak1.position.set(0.24, 0.05, 0.21);
+    cBeak1.rotation.x = Math.PI * 0.7;
+    group.add(cBeak1);
+
+    // Chick 2 (chirping beside mama)
+    const chick2 = new THREE.Mesh(chickGeo, chickMat);
+    chick2.position.set(-0.20, 0.08, -0.10);
+    group.add(chick2);
+    const cBeak2 = new THREE.Mesh(chickBeakGeo, chickBeakMat);
+    cBeak2.position.set(-0.20, 0.09, -0.04);
+    cBeak2.rotation.x = Math.PI * 0.3;
+    group.add(cBeak2);
+
     return group;
+  }
+
+  // --- RUSTIC WOODEN POST & RAIL FENCE (matching Image 1!) ---
+  public static createRusticFence(length = 2.0): THREE.Group {
+    const fence = new THREE.Group();
+    fence.name = 'wooden_fence';
+
+    const timberMat = getCachedMaterial('#5c382e');
+    const darkWoodMat = getCachedMaterial('#3f241a');
+
+    // 1. Two Sturdy Weathered Wooden Posts
+    const postGeo = getCachedGeometry('fence_post_geo', () => new THREE.BoxGeometry(0.13, 0.76, 0.13));
+    const capGeo = getCachedGeometry('fence_post_cap_geo', () => new THREE.ConeGeometry(0.10, 0.08, 4));
+
+    const halfL = length / 2;
+    [-halfL, halfL].forEach((px) => {
+      const post = new THREE.Mesh(postGeo, timberMat);
+      post.position.set(px, 0.38, 0);
+      fence.add(post);
+
+      const cap = new THREE.Mesh(capGeo, darkWoodMat);
+      cap.position.set(px, 0.78, 0);
+      cap.rotation.y = Math.PI / 4;
+      fence.add(cap);
+    });
+
+    // 2. Dual Split Rails (Top and Mid rails running between posts)
+    const railTopGeo = getCachedGeometry(`fence_rail_top_${length}`, () => new THREE.BoxGeometry(length + 0.1, 0.08, 0.08));
+    const railTop = new THREE.Mesh(railTopGeo, timberMat);
+    railTop.position.set(0, 0.56, 0);
+    fence.add(railTop);
+
+    const railMidGeo = getCachedGeometry(`fence_rail_mid_${length}`, () => new THREE.BoxGeometry(length + 0.1, 0.08, 0.08));
+    const railMid = new THREE.Mesh(railMidGeo, timberMat);
+    railMid.position.set(0, 0.32, 0);
+    fence.add(railMid);
+
+    return fence;
+  }
+
+  // --- CONIFER PINE / FIR TREE (Tall Evergreen matching forest in Image 1!) ---
+  public static createPineTree(): THREE.Group {
+    const tree = new THREE.Group();
+    tree.name = 'pine_tree';
+
+    // 1. Ground Drop Shadow
+    const shadowMat = getCachedMaterial('#071207', 1, 0);
+    shadowMat.transparent = true;
+    shadowMat.opacity = 0.42;
+    const shadowGeo = getCachedGeometry('pine_shadow_geo', () => new THREE.PlaneGeometry(2.4, 1.8));
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.set(0.2, 0.015, 0.2);
+    tree.add(shadow);
+
+    // 2. Tall Sturdy Trunk
+    const trunkMat = getCachedMaterial('#451a03');
+    const trunkGeo = getCachedGeometry('pine_trunk_geo', () => new THREE.CylinderGeometry(0.20, 0.32, 2.8, 6));
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.y = 1.4;
+    tree.add(trunk);
+
+    // 3. Four Layered Conical Needle Foliage Tiers (Layered evergreen tones)
+    const pineTiers = [
+      { r: 1.35, h: 1.3, y: 2.2, color: '#1b4332' }, // Deep forest base
+      { r: 1.10, h: 1.2, y: 2.9, color: '#2d6a4f' }, // Mid pine
+      { r: 0.82, h: 1.1, y: 3.6, color: '#40916c' }, // Sunlit green
+      { r: 0.52, h: 0.9, y: 4.2, color: '#52b788' }, // Peak tip
+    ];
+
+    pineTiers.forEach((tier, idx) => {
+      const tierMat = getCachedMaterial(tier.color);
+      const tierGeo = getCachedGeometry(`pine_tier_${idx}`, () => new THREE.ConeGeometry(tier.r, tier.h, 7));
+      const tierMesh = new THREE.Mesh(tierGeo, tierMat);
+      tierMesh.position.y = tier.y;
+      tree.add(tierMesh);
+    });
+
+    return tree;
+  }
+
+  // --- FLOATING WATER LILY PAD & LOTUS BLOSSOM (Studio Ghibli River Accent) ---
+  public static createWaterLily(): THREE.Group {
+    const lily = new THREE.Group();
+    lily.name = 'water_lily';
+
+    const padMat = getCachedMaterial('#166534');
+    const padGeo = getCachedGeometry('lily_pad_geo', () => new THREE.CylinderGeometry(0.24, 0.24, 0.015, 8));
+    const pad = new THREE.Mesh(padGeo, padMat);
+    pad.position.y = 0.008;
+    lily.add(pad);
+
+    const flowerMat = getCachedMaterial('#f472b6');
+    const flowerGeo = getCachedGeometry('lotus_flower_geo', () => new THREE.DodecahedronGeometry(0.065));
+    const flower = new THREE.Mesh(flowerGeo, flowerMat);
+    flower.position.set(0.04, 0.045, 0.02);
+    lily.add(flower);
+
+    const centerMat = getCachedMaterial('#fde047');
+    const centerGeo = getCachedGeometry('lotus_center_geo', () => new THREE.SphereGeometry(0.025, 4, 4));
+    const center = new THREE.Mesh(centerGeo, centerMat);
+    center.position.set(0.04, 0.075, 0.02);
+    lily.add(center);
+
+    return lily;
   }
 
   public static createCow(): THREE.Group {
@@ -479,26 +1290,50 @@ export class ModelFactory {
     return bin;
   }
 
-  // --- DEBRIS / WILD OBJECTS ---
+  // --- DEBRIS / WILD OBJECTS (High-Fidelity Ghibli Mossy Boulders & Annual Ring Logs) ---
   public static createDebris(type: DebrisType, palette: TexturePackPalette): THREE.Group {
     const group = new THREE.Group();
     group.name = `debris_${type}`;
 
     if (type === 'log') {
-      const barkMat = getCachedMaterial('#6d4c41');
-      const logGeo = getCachedGeometry('debris_log', () => new THREE.CylinderGeometry(0.18, 0.22, 0.9, 6));
+      // 1. Soft Contact Drop Shadow on Ground
+      const shadowMat = new THREE.MeshBasicMaterial({
+        color: 0x071207,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      });
+      const shadowGeo = getCachedGeometry('debris_log_shadow_v3', () => new THREE.PlaneGeometry(1.25, 0.62));
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.rotation.z = Math.PI / 4;
+      shadow.position.set(0, 0.015, 0);
+      group.add(shadow);
+
+      // 2. Trunk with Rich Bark & Moss Texture
+      const barkMat = new THREE.MeshLambertMaterial({ map: getLogBarkTexture(), color: 0xffffff });
+      const logGeo = getCachedGeometry('debris_log_v3', () => new THREE.CylinderGeometry(0.20, 0.22, 1.0, 10));
       const logMesh = new THREE.Mesh(logGeo, barkMat);
       logMesh.rotation.z = Math.PI / 2;
       logMesh.rotation.y = Math.PI / 4;
-      logMesh.position.y = 0.15;
+      logMesh.position.y = 0.18;
       group.add(logMesh);
 
-      const innerWoodMat = getCachedMaterial('#d7ccc8');
-      const endGeo = getCachedGeometry('debris_log_end', () => new THREE.CircleGeometry(0.17, 6));
-      const end1 = new THREE.Mesh(endGeo, innerWoodMat);
-      end1.position.set(-0.35, 0.15, 0.35);
-      end1.rotation.y = -Math.PI / 4;
+      // 3. Cut Log Ends with Concentric Annual Growth Rings (Lingkaran Tahun Kayu)
+      const ringMat = new THREE.MeshLambertMaterial({ map: getLogEndTexture(), color: 0xffffff });
+      const endGeo = getCachedGeometry('debris_log_end_v3', () => new THREE.CircleGeometry(0.198, 12));
+
+      // End 1 (South-East facing cut)
+      const end1 = new THREE.Mesh(endGeo, ringMat);
+      end1.position.set(0.354, 0.18, -0.354);
+      end1.rotation.y = Math.PI / 4;
       group.add(end1);
+
+      // End 2 (North-West facing cut)
+      const end2 = new THREE.Mesh(endGeo, ringMat);
+      end2.position.set(-0.354, 0.18, 0.354);
+      end2.rotation.y = -Math.PI * 0.75;
+      group.add(end2);
     } else if (type === 'wild_tree') {
       const trunkMat = getCachedMaterial('#5d4037');
       const trunkGeo = getCachedGeometry('debris_tree_trunk', () => new THREE.CylinderGeometry(0.12, 0.18, 0.9, 6));
@@ -523,18 +1358,75 @@ export class ModelFactory {
       leaf3.position.set(0.22, 0.85, -0.12);
       group.add(leaf3);
     } else if (type === 'small_stone') {
-      const stoneMat = getCachedMaterial('#78909c');
-      const stoneGeo = getCachedGeometry('debris_small_stone', () => new THREE.DodecahedronGeometry(0.25, 0));
-      const stone = new THREE.Mesh(stoneGeo, stoneMat);
-      stone.scale.set(1.2, 0.65, 0.9);
-      stone.position.set(0, 0.12, 0);
+      // 1. Soft Ground Contact Shadow
+      const shadowMat = new THREE.MeshBasicMaterial({
+        color: 0x071207,
+        transparent: true,
+        opacity: 0.38,
+        depthWrite: false,
+      });
+      const shadowGeo = getCachedGeometry('debris_small_shadow_v3', () => new THREE.CircleGeometry(0.34, 12));
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.set(0, 0.015, 0);
+      group.add(shadow);
+
+      // 2. Rounded River Pebble with Mossy Boulder Texture
+      const pebbleGeo = getCachedGeometry('debris_pebble_v3', () => {
+        const geom = new THREE.DodecahedronGeometry(0.25, 1);
+        geom.scale(1.22, 0.72, 0.96);
+        return geom;
+      });
+      const pebbleMat = new THREE.MeshLambertMaterial({
+        map: getMossyBoulderTexture(),
+        color: 0xffffff,
+      });
+      const stone = new THREE.Mesh(pebbleGeo, pebbleMat);
+      stone.position.set(0, 0.14, 0);
       group.add(stone);
     } else if (type === 'big_stone') {
-      const boulderMat = getCachedMaterial('#455a64');
-      const boulderGeo = getCachedGeometry('debris_big_stone', () => new THREE.DodecahedronGeometry(0.52, 0));
+      // 1. Soft Ground Contact Shadow (Bayangan Kontak Alami)
+      const shadowMat = new THREE.MeshBasicMaterial({
+        color: 0x071207,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+      });
+      const shadowGeo = getCachedGeometry('debris_boulder_shadow_v3', () => new THREE.CircleGeometry(0.72, 16));
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.set(0, 0.015, 0);
+      group.add(shadow);
+
+      // 2. Sculpted Natural River Boulder Geometry (Grounded, Rounded, Naturally Perturbed)
+      const boulderGeo = getCachedGeometry('debris_mossy_boulder_v3', () => {
+        const geom = new THREE.IcosahedronGeometry(0.55, 2);
+        const pos = geom.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const vx = pos.getX(i);
+          const vy = pos.getY(i);
+          const vz = pos.getZ(i);
+
+          // Flatten bottom slightly for stable ground contact
+          let newY = vy;
+          if (newY < -0.1) {
+            newY *= 0.65;
+          }
+
+          // Gentle natural boulder organic wobble
+          const noise = Math.sin(vx * 3.5 + vy * 2.8) * 0.06 + Math.cos(vz * 3.2) * 0.05;
+          pos.setXYZ(i, vx * 1.15 + noise, newY + noise * 0.5, vz * 1.05 + noise);
+        }
+        geom.computeVertexNormals();
+        return geom;
+      });
+
+      const boulderMat = new THREE.MeshLambertMaterial({
+        map: getMossyBoulderTexture(),
+        color: 0xffffff,
+      });
       const boulder = new THREE.Mesh(boulderGeo, boulderMat);
-      boulder.scale.set(1.2, 0.9, 1.1);
-      boulder.position.set(0, 0.35, 0);
+      boulder.position.set(0, 0.32, 0);
       group.add(boulder);
     } else if (type === 'weed') {
       const weedMat1 = getCachedMaterial('#4ade80');
@@ -926,34 +1818,6 @@ export class ModelFactory {
     post.add(glass);
 
     return post;
-  }
-
-  // Rustic Wooden Roadside Fence Section
-  public static createRusticFence(): THREE.Group {
-    const fence = new THREE.Group();
-    const woodMat = getCachedMaterial('#5c3d2e');
-
-    // Posts
-    const postGeo = getCachedGeometry('fence_post', () => new THREE.CylinderGeometry(0.07, 0.08, 0.9, 5));
-    const p1 = new THREE.Mesh(postGeo, woodMat);
-    p1.position.set(-0.7, 0.45, 0);
-    fence.add(p1);
-
-    const p2 = new THREE.Mesh(postGeo, woodMat);
-    p2.position.set(0.7, 0.45, 0);
-    fence.add(p2);
-
-    // Rails
-    const railGeo = getCachedGeometry('fence_rail', () => new THREE.BoxGeometry(1.48, 0.07, 0.07));
-    const r1 = new THREE.Mesh(railGeo, woodMat);
-    r1.position.set(0, 0.65, 0);
-    fence.add(r1);
-
-    const r2 = new THREE.Mesh(railGeo, woodMat);
-    r2.position.set(0, 0.35, 0);
-    fence.add(r2);
-
-    return fence;
   }
 
   // 9. Mountain Mine Entrance Archway

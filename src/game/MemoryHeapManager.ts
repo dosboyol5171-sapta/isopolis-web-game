@@ -39,49 +39,54 @@ export class MemoryHeapManager {
 
     for (let hour = 0; hour < 24; hour++) {
       let skyHex = palette.skyNoon;
-      let ambHex = 0xffffff;
-      let ambInt = 1.30;
-      let dirHex = 0xfffbeb;
-      let dirInt = 1.20;
-      let sunY = 45;
-      let sunX = 25;
+      let ambHex = 0xfef9c3; // Soft warm golden ambient
+      let ambInt = 1.35;
+      let dirHex = 0xffedd5; // Warm sunlit amber
+      let dirInt = 1.40;
+      let sunY = 38;
+      let sunX = -26; // Sun in top-left behind trees
+      let sunZ = -22;
 
       if (hour >= 5 && hour < 8) {
-        // Morning Dawn
+        // Morning Dawn: Warm golden hour rays
         skyHex = palette.skyMorning;
-        ambHex = 0xfff0e6;
-        ambInt = 1.15;
-        dirHex = 0xffb380;
-        dirInt = 1.05;
-        sunY = 22;
-        sunX = 35;
+        ambHex = 0xfef3c7;
+        ambInt = 1.25;
+        dirHex = 0xfdba74;
+        dirInt = 1.30;
+        sunY = 24;
+        sunX = -32;
+        sunZ = -26;
       } else if (hour >= 8 && hour < 16) {
-        // Crisp, Bright Noon
+        // Crisp, Warm Sunlit Day (Ghibli Golden Sunlight)
         skyHex = palette.skyNoon;
-        ambHex = 0xffffff;
-        ambInt = 1.35;
-        dirHex = 0xfffbeb;
-        dirInt = 1.25;
-        sunY = 45;
-        sunX = 25;
+        ambHex = 0xfef9c3;
+        ambInt = 1.38;
+        dirHex = 0xfff7ed;
+        dirInt = 1.45;
+        sunY = 38;
+        sunX = -26;
+        sunZ = -22;
       } else if (hour >= 16 && hour < 19) {
         // Dusk / Golden Sunset
         skyHex = palette.skySunset;
-        ambHex = 0xffe0cc;
-        ambInt = 1.10;
-        dirHex = 0xff8a65;
-        dirInt = 1.0;
-        sunY = 18;
-        sunX = 40;
+        ambHex = 0xffedd5;
+        ambInt = 1.20;
+        dirHex = 0xf97316;
+        dirInt = 1.25;
+        sunY = 20;
+        sunX = -35;
+        sunZ = -20;
       } else {
         // Night
         skyHex = palette.skyNight;
-        ambHex = 0x90caf9;
+        ambHex = 0x93c5fd;
         ambInt = 0.55;
-        dirHex = 0x3f51b5;
-        dirInt = 0.35;
+        dirHex = 0x6366f1;
+        dirInt = 0.40;
         sunY = 25;
         sunX = -20;
+        sunZ = 20;
       }
 
       this.lightingLUT[hour] = {
@@ -92,7 +97,7 @@ export class MemoryHeapManager {
         dirIntensity: dirInt,
         dirPosX: sunX,
         dirPosY: sunY,
-        dirPosZ: 20,
+        dirPosZ: sunZ,
       };
     }
 

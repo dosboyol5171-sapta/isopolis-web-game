@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PlayerData, TileState, MapLocation } from '../types/game';
-import { Sun, Moon, CloudRain, Clock, Zap, Activity, Maximize, Settings } from 'lucide-react';
+import { Sun, Moon, CloudRain, Clock, Zap, Activity, Maximize, Settings, MapPin } from 'lucide-react';
 import { MiniMapWidget } from './MiniMapWidget';
 import { WorldRegistry } from '../game/WorldRegistry';
 
@@ -78,6 +78,17 @@ export const HUD: React.FC<HUDProps> = ({
             <div className="text-[9px] text-slate-300 font-mono whitespace-nowrap">
               Hari ke-{player.day}
             </div>
+          </div>
+        </div>
+
+        {/* Real-time Player Coordinates Badge (Red Pin Highlight) */}
+        <div className="bg-rose-500/15 border border-rose-400/40 rounded-xl px-2 py-1 flex items-center gap-1.5 text-rose-200 shadow-sm shrink-0 font-mono">
+          <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+          <div className="flex flex-col leading-none">
+            <span className="text-[7.5px] uppercase tracking-wider font-extrabold text-rose-300">Koordinat</span>
+            <span className="text-[10px] font-black text-rose-100 mt-0.5 whitespace-nowrap">
+              X:{playerGridPos.x.toFixed(1)} Z:{playerGridPos.z.toFixed(1)}
+            </span>
           </div>
         </div>
 

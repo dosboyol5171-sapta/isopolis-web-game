@@ -132,8 +132,91 @@ function createGhibliGrassTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+// Procedural High-Fidelity Studio Ghibli Tilled Garden Furrow Soil Texture
+function createGhibliTilledSoilTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // 1. Rich dark fertile earth base
+  ctx.fillStyle = '#4a2810';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // 2. Parallel Raised Furrows (4 broad planting mounds running across the tile)
+  const furrowCount = 4;
+  const furrowHeight = 512 / furrowCount;
+
+  for (let f = 0; f < furrowCount; f++) {
+    const startY = f * furrowHeight;
+    const centerY = startY + furrowHeight / 2;
+
+    // Deep trough shadow at the furrow valleys
+    const troughGrad = ctx.createLinearGradient(0, startY, 0, startY + furrowHeight);
+    troughGrad.addColorStop(0.0, '#2b1406');
+    troughGrad.addColorStop(0.20, '#3d1e0a');
+    troughGrad.addColorStop(0.50, '#824922'); // Sunlit crest ridge
+    troughGrad.addColorStop(0.80, '#3d1e0a');
+    troughGrad.addColorStop(1.0, '#2b1406');
+    ctx.fillStyle = troughGrad;
+    ctx.fillRect(0, startY, 512, furrowHeight);
+
+    // Warm sunlit golden ridge highlight along the center of each furrow
+    const ridgeGrad = ctx.createLinearGradient(0, centerY - 14, 0, centerY + 14);
+    ridgeGrad.addColorStop(0, 'rgba(160, 95, 48, 0)');
+    ridgeGrad.addColorStop(0.5, 'rgba(176, 110, 56, 0.75)');
+    ridgeGrad.addColorStop(1, 'rgba(160, 95, 48, 0)');
+    ctx.fillStyle = ridgeGrad;
+    ctx.fillRect(0, centerY - 14, 512, 28);
+  }
+
+  // 3. Crumbly moist soil clods, rich dark earth chunks & micro pebbles
+  for (let i = 0; i < 750; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const size = 1.2 + Math.random() * 3.6;
+    const isDark = Math.random() > 0.45;
+    const isHighlight = Math.random() > 0.85;
+
+    if (isHighlight) {
+      ctx.fillStyle = `rgba(202, 138, 74, ${0.4 + Math.random() * 0.4})`;
+    } else if (isDark) {
+      ctx.fillStyle = `rgba(32, 15, 6, ${0.5 + Math.random() * 0.4})`;
+    } else {
+      ctx.fillStyle = `rgba(105, 56, 25, ${0.4 + Math.random() * 0.4})`;
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 4. Subtle garden pebble accents
+  for (let p = 0; p < 28; p++) {
+    const px = Math.random() * 512;
+    const py = Math.random() * 512;
+    const prx = 2.0 + Math.random() * 2.5;
+    const pry = 1.5 + Math.random() * 2.0;
+    ctx.fillStyle = '#8c7d70';
+    ctx.beginPath();
+    ctx.ellipse(px, py, prx, pry, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#3e2723';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+
 const grassTex = createTileTexture(grassTexUrl, 1.0);
-const soilTex = createTileTexture(soilTexUrl, 1.0);
+const soilTex = createGhibliTilledSoilTexture();
 const pathTex = createTileTexture(pathTexUrl, 1.0);
 const sandTex = createTileTexture(sandTexUrl, 1.0);
 const rockTex = createTileTexture(rockTexUrl, 1.0);
@@ -146,7 +229,75 @@ const soilMat = new THREE.MeshLambertMaterial({ map: soilTex, color: 0xffffff })
 const pathMat = new THREE.MeshLambertMaterial({ map: pathTex, color: 0xffffff });
 const sandMat = new THREE.MeshLambertMaterial({ map: sandTex, color: 0xffffff });
 const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, color: 0xffffff });
-const waterMat = new THREE.MeshLambertMaterial({ color: 0x0284c7, transparent: true, opacity: 0.85 });
+
+// Procedural High-Fidelity Studio Ghibli River Water Texture with Flowing Streamlines & Sun Glints
+function createRiverWaterTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // 1. Deep Crystal Cyan & Sapphire River Water Gradient
+  const grad = ctx.createLinearGradient(0, 0, 512, 512);
+  grad.addColorStop(0, '#0284c7'); // Sapphire cyan
+  grad.addColorStop(0.3, '#0ea5e9'); // Glistening sky water
+  grad.addColorStop(0.7, '#0369a1'); // Deep river channel
+  grad.addColorStop(1, '#0284c7');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // 2. Smooth River Current Streamlines & Flow Ribbons (Oriented along X flow axis)
+  for (let y = 16; y < 512; y += 32) {
+    ctx.strokeStyle = y % 64 === 0 ? 'rgba(255, 255, 255, 0.65)' : 'rgba(186, 230, 253, 0.45)';
+    ctx.lineWidth = y % 64 === 0 ? 5.0 : 2.8;
+    ctx.beginPath();
+    for (let x = 0; x <= 512; x += 16) {
+      const wave = Math.sin((x / 512) * Math.PI * 4 + y * 0.1) * 5.0;
+      if (x === 0) ctx.moveTo(x, y + wave);
+      else ctx.lineTo(x, y + wave);
+    }
+    ctx.stroke();
+  }
+
+  // 3. Crisp Stylized Water Current Streaks & Foam Crests
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  for (let i = 0; i < 40; i++) {
+    const fx = (i * 37) % 500 + 6;
+    const fy = (i * 59) % 490 + 10;
+    const w = 20 + (i % 5) * 8;
+    const h = 4.0;
+    ctx.beginPath();
+    ctx.ellipse(fx, fy, w, h, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 4. Sparkling Diamond Sunlight Glints
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  for (let i = 0; i < 25; i++) {
+    const gx = (i * 73 + 20) % 500;
+    const gy = (i * 97 + 15) % 500;
+    ctx.beginPath();
+    ctx.arc(gx, gy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1.0, 1.0);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const riverWaterTex = createRiverWaterTexture();
+const waterMat = new THREE.MeshStandardMaterial({
+  map: riverWaterTex,
+  color: 0xdff4ff,
+  transparent: true,
+  opacity: 0.85,
+  roughness: 0.12,
+  metalness: 0.16,
+});
 const treeLeafMat = new THREE.MeshLambertMaterial({ map: foliageTex, color: 0xffffff });
 const treeTrunkMat = new THREE.MeshLambertMaterial({ map: barkTex, color: 0xffffff });
 
@@ -167,12 +318,15 @@ function createWaterFoamTexture(): THREE.CanvasTexture {
   ctx.strokeRect(12, 12, 104, 104);
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
+const waterFoamTex = createWaterFoamTexture();
 const waterFoamMat = new THREE.MeshBasicMaterial({
-  map: createWaterFoamTexture(),
+  map: waterFoamTex,
   transparent: true,
   opacity: 0.80,
   depthWrite: false,
@@ -438,17 +592,15 @@ function createFarmTJunctionTexture(): THREE.CanvasTexture {
     ctx.fillRect(x, 256 - innerTrackW / 2, 5, innerTrackW);
   }
 
-  // 3. Wide Smooth Central Loam Hub connecting all 3 directions seamlessly
-  const hubGrad = ctx.createRadialGradient(256, 256, 30, 256, 256, 210);
-  hubGrad.addColorStop(0, 'rgba(255, 226, 190, 0.95)');
-  hubGrad.addColorStop(0.4, '#deb07c');
-  hubGrad.addColorStop(0.7, '#be824c');
-  hubGrad.addColorStop(0.9, 'rgba(115, 70, 32, 0.75)');
+  // 3. Wide Smooth Central Loam Hub connecting all 3 directions seamlessly without harsh circular disc
+  const hubGrad = ctx.createLinearGradient(256 - pathWidth / 2, 0, 256 + pathWidth / 2, 0);
+  hubGrad.addColorStop(0, 'rgba(105, 62, 28, 0)');
+  hubGrad.addColorStop(0.2, '#be824c');
+  hubGrad.addColorStop(0.5, '#deb07c');
+  hubGrad.addColorStop(0.8, '#be824c');
   hubGrad.addColorStop(1, 'rgba(105, 62, 28, 0)');
   ctx.fillStyle = hubGrad;
-  ctx.beginPath();
-  ctx.arc(256, 256, 210, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(256 - pathWidth / 2, 256 - pathWidth / 2, pathWidth, pathWidth);
 
   // 4. Fine Earth Grains and Stepping River Stones at junction
   for (let i = 0; i < 500; i++) {
@@ -597,16 +749,15 @@ function createFarmCrossroadTexture(): THREE.CanvasTexture {
     ctx.fillRect(x, 256 - pathWidth / 2 - 32, 5, pathWidth + 64);
   }
 
-  // Central circular plaza hub
-  const hubGrad = ctx.createRadialGradient(256, 256, 40, 256, 256, 220);
-  hubGrad.addColorStop(0, 'rgba(255, 226, 190, 0.95)');
-  hubGrad.addColorStop(0.45, '#deb07c');
-  hubGrad.addColorStop(0.75, '#be824c');
+  // Central smooth blend without harsh circular disc
+  const hubGrad = ctx.createLinearGradient(256 - pathWidth / 2, 0, 256 + pathWidth / 2, 0);
+  hubGrad.addColorStop(0, 'rgba(105, 62, 28, 0)');
+  hubGrad.addColorStop(0.2, '#be824c');
+  hubGrad.addColorStop(0.5, '#deb07c');
+  hubGrad.addColorStop(0.8, '#be824c');
   hubGrad.addColorStop(1, 'rgba(105, 62, 28, 0)');
   ctx.fillStyle = hubGrad;
-  ctx.beginPath();
-  ctx.arc(256, 256, 220, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(256 - pathWidth / 2, 256 - pathWidth / 2, pathWidth, pathWidth);
 
   // Corner Stepping Stones & Wildflowers
   drawWatercolorStone(ctx, 110, 110, 16, 10, 0.4, '#8c7d70');
@@ -721,22 +872,22 @@ function createSoilBorderTexture(): THREE.CanvasTexture {
   ctx.clearRect(0, 0, 256, 256);
 
   const center = 128;
-  const outerRadius = 112;
-  const innerRadius = 78;
+  const outerRadius = 118;
+  const innerRadius = 72;
 
   // Soft wavy furrow ridge with organic scalloped dirt edge
-  for (let r = outerRadius; r >= innerRadius; r -= 2.5) {
+  for (let r = outerRadius; r >= innerRadius; r -= 2.0) {
     const t = (r - innerRadius) / (outerRadius - innerRadius);
-    const alpha = (1 - t * t) * 0.88;
-    ctx.fillStyle = `rgba(58, 32, 14, ${alpha})`;
+    const alpha = (1 - t * t) * 0.92;
+    ctx.fillStyle = `rgba(62, 34, 14, ${alpha})`;
     ctx.beginPath();
     const steps = 72;
     for (let i = 0; i <= steps; i++) {
       const angle = (i / steps) * Math.PI * 2;
       const wobble =
-        Math.sin(angle * 6) * 4.5 +
-        Math.cos(angle * 12) * 3.0 +
-        Math.sin(angle * 22) * 1.8;
+        Math.sin(angle * 7) * 6.0 +
+        Math.cos(angle * 13) * 3.5 +
+        Math.sin(angle * 23) * 2.2;
       const curR = r + wobble;
       const px = center + Math.cos(angle) * curR;
       const py = center + Math.sin(angle) * curR;
@@ -748,16 +899,28 @@ function createSoilBorderTexture(): THREE.CanvasTexture {
   }
 
   // Crumbly dark moist soil specks and tiny garden pebbles
-  for (let i = 0; i < 220; i++) {
+  for (let i = 0; i < 300; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const dist = innerRadius + Math.random() * (outerRadius - innerRadius + 6);
+    const dist = innerRadius + Math.random() * (outerRadius - innerRadius + 14);
     const cx = center + Math.cos(angle) * dist;
     const cy = center + Math.sin(angle) * dist;
-    const size = 1.0 + Math.random() * 3.2;
-    const darkness = 0.45 + Math.random() * 0.45;
-    ctx.fillStyle = `rgba(42, 22, 10, ${darkness})`;
+    const size = 1.2 + Math.random() * 3.6;
+    const darkness = 0.5 + Math.random() * 0.45;
+    ctx.fillStyle = `rgba(45, 24, 10, ${darkness})`;
     ctx.beginPath();
     ctx.arc(cx, cy, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Small spilled crumbs on the outside edge for organic grass blending
+  for (let i = 0; i < 110; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = outerRadius + Math.random() * 12;
+    const cx = center + Math.cos(angle) * dist;
+    const cy = center + Math.sin(angle) * dist;
+    ctx.fillStyle = 'rgba(75, 42, 18, 0.65)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 1.0 + Math.random() * 1.8, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -958,6 +1121,11 @@ export function calculateTileElevation(
   tileType: string
 ): number {
   if (tileType === 'water') {
+    // If player walks across the wooden bridge in farm (x around 6, z between 21.2 and 23.8)
+    if (location === 'farm' && Math.abs(x - 6) <= 0.8 && z >= 21.2 && z <= 23.8) {
+      const distFromCenter = Math.abs(z - 22.5) / 1.3;
+      return 0.08 + Math.cos(Math.min(1.0, distFromCenter) * Math.PI * 0.5) * 0.08;
+    }
     return -0.06;
   }
   if (tileType === 'soil') {
@@ -997,6 +1165,10 @@ export class GameScene {
   private visualTuftsMesh!: THREE.InstancedMesh;
   private visualFlowersMesh!: THREE.InstancedMesh;
   private pathButterflies: { group: THREE.Group; leftWing: THREE.Mesh; rightWing: THREE.Mesh; basePos: THREE.Vector3; speed: number; radius: number; phase: number }[] = [];
+  private riverFoamParticles: { mesh: THREE.Mesh; speed: number; offsetZ: number; phase: number }[] = [];
+  private godRays: { mesh: THREE.Mesh; baseOpacity: number; phase: number }[] = [];
+  private chimneySmoke: { mesh: THREE.Mesh; speed: number; baseScale: number }[] = [];
+  private bumblebees: { group: THREE.Group; leftWing: THREE.Mesh; rightWing: THREE.Mesh; basePos: THREE.Vector3; speed: number; phase: number }[] = [];
   private buildingGroup: THREE.Group;
   private treeTrunkInstanced!: THREE.InstancedMesh;
   private treeOakLeafInstanced!: THREE.InstancedMesh;
@@ -1067,10 +1239,10 @@ export class GameScene {
     this.settings = settings;
     this.clock = new THREE.Clock();
 
-    // 1. Scene & Clear Horizon (No Distant Blur or Fog Lag)
+    // 1. Scene & Painterly Sunlit Atmosphere
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(palette.skyNoon);
-    this.scene.fog = null;
+    this.scene.fog = new THREE.FogExp2(0xcfead6, 0.0075);
 
     // 2. Camera - Dynamic 3D Perspective Projection with Strong Depth
     const width = container.clientWidth || window.innerWidth || 800;
@@ -1088,14 +1260,30 @@ export class GameScene {
     this.camera.position.set(offsetX, camY, offsetZ);
     this.camera.lookAt(0, 0.5, 0);
 
-    // 3. Bright, Crisp, Vibrant Sunlit Lighting
-    this.ambLight = new THREE.AmbientLight(0xffffff, 1.25);
+    // 3. Painterly Studio Ghibli Sunlit Lighting & Natural Golden Atmosphere
+    this.ambLight = new THREE.AmbientLight(0xfef9c3, 0.90);
     this.scene.add(this.ambLight);
 
-    this.dirLight = new THREE.DirectionalLight(0xfffbeb, 1.20);
-    this.dirLight.position.set(25, 40, 20);
-    this.dirLight.castShadow = false;
+    const hemiLight = new THREE.HemisphereLight(0xfef9c3, 0x3d7032, 0.95);
+    this.scene.add(hemiLight);
+
+    this.dirLight = new THREE.DirectionalLight(0xffedd5, 1.55);
+    this.dirLight.position.set(-26, 38, -22); // Sun in top-left behind canopy matching Image 1
+    this.dirLight.castShadow = true;
+    this.dirLight.shadow.mapSize.width = 2048;
+    this.dirLight.shadow.mapSize.height = 2048;
+    this.dirLight.shadow.camera.near = 1;
+    this.dirLight.shadow.camera.far = 150;
+    this.dirLight.shadow.camera.left = -32;
+    this.dirLight.shadow.camera.right = 32;
+    this.dirLight.shadow.camera.top = 32;
+    this.dirLight.shadow.camera.bottom = -32;
+    this.dirLight.shadow.bias = -0.0006;
+    this.dirLight.shadow.normalBias = 0.02;
     this.scene.add(this.dirLight);
+
+    // Subtle warm golden atmospheric fog softening the distant forest (matching Image 1)
+    this.scene.fog = new THREE.FogExp2(0xfef9c3, 0.0065);
 
     // 4. WebGL Renderer with Native Double-Buffering & High Performance
     this.renderer = new THREE.WebGLRenderer({
@@ -1103,11 +1291,16 @@ export class GameScene {
       alpha: false,
       stencil: false,
       preserveDrawingBuffer: false,
+      powerPreference: 'high-performance',
     });
     this.renderer.setSize(width, height);
-    const maxPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    const maxPR = Math.min(window.devicePixelRatio || 1, 2.0);
     this.renderer.setPixelRatio(maxPR);
-    this.renderer.shadowMap.enabled = false;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     // Clear stale canvas children before attaching
     while (container.firstChild) {
@@ -1228,6 +1421,12 @@ export class GameScene {
 
     // Player
     this.playerMesh = ModelFactory.createPlayer(this.activePalette);
+    this.playerMesh.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
     const halfW = (this.gridWidth * this.tileSize) / 2;
     const halfH = (this.gridHeight * this.tileSize) / 2;
     const initX = 7 * this.tileSize - halfW + this.tileSize / 2;
@@ -1334,7 +1533,8 @@ export class GameScene {
     this.meadowMesh = new THREE.Mesh(meadowGeo, meadowMat);
     this.meadowMesh.rotation.x = -Math.PI / 2;
     this.meadowMesh.position.y = 0;
-    this.meadowMesh.frustumCulled = true;
+    this.meadowMesh.frustumCulled = false;
+    this.meadowMesh.receiveShadow = true;
     this.scene.add(this.meadowMesh);
   }
 
@@ -1449,7 +1649,7 @@ export class GameScene {
 
     const totalTiles = this.gridWidth * this.gridHeight;
     this.groundInstancedMesh = new THREE.InstancedMesh(this.tileGeometry, new THREE.MeshBasicMaterial({ visible: false }), totalTiles);
-    this.groundInstancedMesh.frustumCulled = true;
+    this.groundInstancedMesh.frustumCulled = false;
 
     this.visualGrassMesh = new THREE.InstancedMesh(this.tileGeometry, grassMat, totalTiles);
     this.visualSoilMesh = new THREE.InstancedMesh(this.tileGeometry, soilMat, totalTiles);
@@ -1458,25 +1658,25 @@ export class GameScene {
     this.visualPathStraightMeshes = farmDirtStraightMats.map((mat) => {
       const activeMat = this.currentLocation === 'farm' ? mat : pathMat;
       const mesh = new THREE.InstancedMesh(this.tileGeometry, activeMat, totalTiles);
-      mesh.frustumCulled = true;
+      mesh.frustumCulled = false;
       return mesh;
     });
 
     const activeTMat = this.currentLocation === 'farm' ? farmDirtTJunctionMat : pathMat;
     this.visualPathTJunctionMesh = new THREE.InstancedMesh(this.tileGeometry, activeTMat, totalTiles);
-    this.visualPathTJunctionMesh.frustumCulled = true;
+    this.visualPathTJunctionMesh.frustumCulled = false;
 
     const activeCornerMat = this.currentLocation === 'farm' ? farmDirtCornerMat : pathMat;
     this.visualPathCornerMesh = new THREE.InstancedMesh(this.tileGeometry, activeCornerMat, totalTiles);
-    this.visualPathCornerMesh.frustumCulled = true;
+    this.visualPathCornerMesh.frustumCulled = false;
 
     const activeCrossroadMat = this.currentLocation === 'farm' ? farmDirtCrossroadMat : pathMat;
     this.visualPathCrossroadMesh = new THREE.InstancedMesh(this.tileGeometry, activeCrossroadMat, totalTiles);
-    this.visualPathCrossroadMesh.frustumCulled = true;
+    this.visualPathCrossroadMesh.frustumCulled = false;
 
     const activeDeadEndMat = this.currentLocation === 'farm' ? farmDirtDeadEndMat : pathMat;
     this.visualPathDeadEndMesh = new THREE.InstancedMesh(this.tileGeometry, activeDeadEndMat, totalTiles);
-    this.visualPathDeadEndMesh.frustumCulled = true;
+    this.visualPathDeadEndMesh.frustumCulled = false;
 
     this.visualSandMesh = new THREE.InstancedMesh(this.tileGeometry, sandMat, totalTiles);
     this.visualRockMesh = new THREE.InstancedMesh(this.tileGeometry, rockMat, totalTiles);
@@ -1499,25 +1699,37 @@ export class GameScene {
     const borderGeo = new THREE.PlaneGeometry(this.tileSize * 1.15, this.tileSize * 1.15);
     borderGeo.rotateX(-Math.PI / 2);
     this.visualSoilBorderMesh = new THREE.InstancedMesh(borderGeo, soilBorderMat, totalTiles);
-    this.visualSoilBorderMesh.frustumCulled = true;
+    this.visualSoilBorderMesh.frustumCulled = false;
 
     const foamGeo = new THREE.PlaneGeometry(this.tileSize * 1.05, this.tileSize * 1.05);
     foamGeo.rotateX(-Math.PI / 2);
     this.visualWaterFoamMesh = new THREE.InstancedMesh(foamGeo, waterFoamMat, totalTiles);
-    this.visualWaterFoamMesh.frustumCulled = true;
+    this.visualWaterFoamMesh.frustumCulled = false;
 
     // Instance Color Buffers for Watered Soil & Multi-Tone Flowers
     this.visualSoilMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(totalTiles * 3), 3);
     this.visualFlowersMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(totalTiles * 3), 3);
 
-    this.visualGrassMesh.frustumCulled = true;
-    this.visualSoilMesh.frustumCulled = true;
-    this.visualPathStraightMeshes.forEach((m) => { m.frustumCulled = true; });
-    this.visualSandMesh.frustumCulled = true;
-    this.visualRockMesh.frustumCulled = true;
-    this.visualWaterMesh.frustumCulled = true;
-    this.visualTuftsMesh.frustumCulled = true;
-    this.visualFlowersMesh.frustumCulled = true;
+    this.visualGrassMesh.frustumCulled = false;
+    this.visualGrassMesh.receiveShadow = true;
+    this.visualSoilMesh.frustumCulled = false;
+    this.visualSoilMesh.receiveShadow = true;
+    this.visualPathStraightMeshes.forEach((m) => {
+      m.frustumCulled = false;
+      m.receiveShadow = true;
+    });
+    this.visualPathTJunctionMesh.receiveShadow = true;
+    this.visualPathCornerMesh.receiveShadow = true;
+    this.visualPathCrossroadMesh.receiveShadow = true;
+    this.visualPathDeadEndMesh.receiveShadow = true;
+    this.visualSandMesh.frustumCulled = false;
+    this.visualSandMesh.receiveShadow = true;
+    this.visualRockMesh.frustumCulled = false;
+    this.visualRockMesh.receiveShadow = true;
+    this.visualWaterMesh.frustumCulled = false;
+    this.visualWaterMesh.receiveShadow = true;
+    this.visualTuftsMesh.frustumCulled = false;
+    this.visualFlowersMesh.frustumCulled = false;
 
     this.scene.add(this.groundInstancedMesh);
     this.scene.add(this.visualGrassMesh);
@@ -1935,25 +2147,25 @@ export class GameScene {
     // A. Trunk Instanced Mesh (Shared by all broadleaf trees)
     const trunkGeo = new THREE.CylinderGeometry(0.20, 0.38, 1.4, 6);
     this.treeTrunkInstanced = new THREE.InstancedMesh(trunkGeo, treeTrunkMat, totalCount);
-    this.treeTrunkInstanced.frustumCulled = true;
+    this.treeTrunkInstanced.frustumCulled = false;
 
     // B. Studio Ghibli Fluffy Cloud Oak Foliage Mesh
     const oakGeo = createCloudOakLeafGeometry();
     this.treeOakLeafInstanced = new THREE.InstancedMesh(oakGeo, treeLeafMat, Math.max(oakTrees.length, 1));
     this.treeOakLeafInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(oakTrees.length, 1) * 3), 3);
-    this.treeOakLeafInstanced.frustumCulled = true;
+    this.treeOakLeafInstanced.frustumCulled = false;
 
     // C. Golden Birch / Autumn Maple Foliage Mesh
     const birchGeo = createBirchLeafGeometry();
     this.treeBirchLeafInstanced = new THREE.InstancedMesh(birchGeo, treeLeafMat, Math.max(birchTrees.length, 1));
     this.treeBirchLeafInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(birchTrees.length, 1) * 3), 3);
-    this.treeBirchLeafInstanced.frustumCulled = true;
+    this.treeBirchLeafInstanced.frustumCulled = false;
 
     // D. Sakura / Apple Blossom Foliage Mesh
     const blossomGeo = createBlossomLeafGeometry();
     this.treeBlossomLeafInstanced = new THREE.InstancedMesh(blossomGeo, treeLeafMat, Math.max(blossomTrees.length, 1));
     this.treeBlossomLeafInstanced.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(blossomTrees.length, 1) * 3), 3);
-    this.treeBlossomLeafInstanced.frustumCulled = true;
+    this.treeBlossomLeafInstanced.frustumCulled = false;
 
     const dummy = new THREE.Object3D();
 
@@ -2038,6 +2250,15 @@ export class GameScene {
     this.treeBirchLeafInstanced.geometry.computeBoundingSphere();
     this.treeBlossomLeafInstanced.geometry.computeBoundingSphere();
 
+    this.treeTrunkInstanced.castShadow = true;
+    this.treeTrunkInstanced.receiveShadow = true;
+    this.treeOakLeafInstanced.castShadow = true;
+    this.treeOakLeafInstanced.receiveShadow = true;
+    this.treeBirchLeafInstanced.castShadow = true;
+    this.treeBirchLeafInstanced.receiveShadow = true;
+    this.treeBlossomLeafInstanced.castShadow = true;
+    this.treeBlossomLeafInstanced.receiveShadow = true;
+
     this.scene.add(this.treeTrunkInstanced);
     this.scene.add(this.treeOakLeafInstanced);
     this.scene.add(this.treeBirchLeafInstanced);
@@ -2098,7 +2319,7 @@ export class GameScene {
       // Visual Textured Meshes
       if (tile.type === 'water') {
         dummy.position.set(posX, tileElevY, posZ);
-        dummy.rotation.set(0, rotAngle, 0);
+        dummy.rotation.set(0, 0, 0); // Uniform horizontal river stream from East to West
         dummy.updateMatrix();
         this.visualWaterMesh.setMatrixAt(wIdx++, dummy.matrix);
 
@@ -2347,9 +2568,15 @@ export class GameScene {
             this.scene.remove(existingCrop);
           }
           const cropMesh = ModelFactory.createCrop(tile.crop.type, tile.crop.stage, this.activePalette);
+          cropMesh.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
           cropMesh.position.set(posX, tileElevY + 0.2, posZ);
           cropMesh.userData = { stage: tile.crop.stage, type: tile.crop.type };
-          cropMesh.frustumCulled = true;
+          cropMesh.frustumCulled = false;
           this.scene.add(cropMesh);
           this.cropMeshMap.set(key, cropMesh);
         }
@@ -2364,9 +2591,15 @@ export class GameScene {
             this.scene.remove(existingDebris);
           }
           const debrisMesh = ModelFactory.createDebris(tile.debris, this.activePalette);
+          debrisMesh.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
           debrisMesh.position.set(posX, tileElevY + 0.18, posZ);
           debrisMesh.userData = { type: tile.debris };
-          debrisMesh.frustumCulled = true;
+          debrisMesh.frustumCulled = false;
           this.scene.add(debrisMesh);
           this.debrisMeshMap.set(key, debrisMesh);
         }
@@ -2489,17 +2722,51 @@ export class GameScene {
         meshGroup = ModelFactory.createStoneStairs();
       } else if (prop.type === 'fishing_shack') {
         meshGroup = ModelFactory.createFishingShack();
+      } else if (prop.type === 'wooden_fence') {
+        meshGroup = ModelFactory.createRusticFence(2.0);
+      } else if (prop.type === 'pine_tree') {
+        meshGroup = ModelFactory.createPineTree();
       }
 
       if (meshGroup) {
+        meshGroup.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
         meshGroup.position.set(posX, posY, posZ);
         if (prop.rotationY) {
           meshGroup.rotation.y = prop.rotationY;
         }
-        meshGroup.frustumCulled = true;
+        meshGroup.frustumCulled = false;
         this.buildingGroup.add(meshGroup);
       }
     });
+
+    // Studio Ghibli River Water Lilies with Pink Lotus Flowers
+    if (this.currentLocation === 'farm') {
+      const lilyLocations = [
+        { gx: 2, gz: 24, rot: 0.4 },
+        { gx: 3, gz: 26, rot: 1.8 },
+        { gx: 9, gz: 22, rot: 2.3 },
+        { gx: 14, gz: 21, rot: 0.9 },
+        { gx: 20, gz: 22, rot: 1.5 },
+      ];
+      lilyLocations.forEach((loc) => {
+        const lily = ModelFactory.createWaterLily();
+        const lx = loc.gx * this.tileSize - halfW + this.tileSize / 2;
+        const lz = loc.gz * this.tileSize - halfH + this.tileSize / 2;
+        lily.position.set(lx, -0.05, lz);
+        lily.rotation.y = loc.rot;
+        this.buildingGroup.add(lily);
+      });
+    }
+
+    // Atmospheric Features matching Studio Ghibli Art in Image 1
+    this.setupGodRays();
+    this.setupChimneySmoke();
+    this.setupBumblebees();
 
     // Animated Nature Butterflies fluttering along the Nature Trails
     this.pathButterflies.forEach((b) => {
@@ -2542,6 +2809,205 @@ export class GameScene {
           basePos: new THREE.Vector3(sp.x, 0.45, sp.z),
           speed: sp.speed,
           radius: sp.radius,
+          phase: sp.phase,
+        });
+      });
+    }
+
+    // Animated River Foam Glints & Drift Wavelets (Flowing Right to Left along River)
+    this.riverFoamParticles.forEach((p) => {
+      this.scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      (p.mesh.material as THREE.Material).dispose();
+    });
+    this.riverFoamParticles = [];
+
+    if (this.currentLocation === 'farm') {
+      const foamGeo = new THREE.PlaneGeometry(0.58, 0.16);
+      foamGeo.rotateX(-Math.PI / 2);
+
+      const numFoams = 18;
+      for (let i = 0; i < numFoams; i++) {
+        const foamMat = new THREE.MeshBasicMaterial({
+          color: i % 2 === 0 ? 0xffffff : 0xbae6fd,
+          transparent: true,
+          opacity: 0.65 + Math.random() * 0.25,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(foamGeo, foamMat);
+        mesh.frustumCulled = false;
+
+        const initX = 13.5 - (i / numFoams) * 23.5;
+        const offsetZ = (Math.random() - 0.5) * 0.7;
+        const phase = Math.random() * Math.PI * 2;
+        const speed = 1.4 + Math.random() * 0.8;
+
+        mesh.position.set(initX, -0.045, this.getRiverCenterWorldZ(initX) + offsetZ);
+        mesh.rotation.y = (Math.random() - 0.5) * 0.15;
+        this.scene.add(mesh);
+
+        this.riverFoamParticles.push({ mesh, speed, offsetZ, phase });
+      }
+    }
+  }
+
+  // Smooth river centerline in world space for continuous right-to-left river drift
+  private getRiverCenterWorldZ(worldX: number): number {
+    const clampedX = Math.max(-10.0, Math.min(13.5, worldX));
+    const t = (13.5 - clampedX) / 23.5; // 0 at East source (worldX = 13.5), 1 at West mouth (worldX = -10.0)
+    return 5.0 + Math.sin(t * Math.PI * 0.5) * 4.0;
+  }
+
+  // --- VOLUMETRIC SUNBEAMS / GOD RAYS STREAMING FROM TOP-LEFT (matching Image 1) ---
+  private setupGodRays() {
+    this.godRays.forEach((r) => {
+      this.scene.remove(r.mesh);
+      r.mesh.geometry.dispose();
+      (r.mesh.material as THREE.Material).dispose();
+    });
+    this.godRays = [];
+
+    if (this.currentLocation === 'farm') {
+      const rayGeo = new THREE.PlaneGeometry(2.8, 20);
+      rayGeo.rotateX(Math.PI * 0.32); // Angled down from top-left canopy towards meadow
+
+      const rayPositions = [
+        { x: -14.0, y: 7.5, z: -13.0, rotY: -0.45, opacity: 0.16 },
+        { x: -10.5, y: 8.0, z: -10.5, rotY: -0.40, opacity: 0.20 },
+        { x: -7.0,  y: 7.8, z: -8.0,  rotY: -0.38, opacity: 0.22 },
+        { x: -3.5,  y: 7.2, z: -6.5,  rotY: -0.35, opacity: 0.18 },
+        { x: 0.5,   y: 7.0, z: -5.0,  rotY: -0.32, opacity: 0.16 },
+        { x: 4.5,   y: 6.8, z: -4.0,  rotY: -0.30, opacity: 0.14 },
+      ];
+
+      rayPositions.forEach((rp, idx) => {
+        const rayMat = new THREE.MeshBasicMaterial({
+          color: 0xfef08a,
+          transparent: true,
+          opacity: rp.opacity,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(rayGeo, rayMat);
+        mesh.position.set(rp.x, rp.y, rp.z);
+        mesh.rotation.y = rp.rotY;
+        mesh.frustumCulled = false;
+        this.scene.add(mesh);
+
+        this.godRays.push({
+          mesh,
+          baseOpacity: rp.opacity,
+          phase: idx * 1.1,
+        });
+      });
+    }
+  }
+
+  // --- FARMHOUSE CHIMNEY SMOKE PUFFS (matching Image 1) ---
+  private setupChimneySmoke() {
+    this.chimneySmoke.forEach((p) => {
+      this.scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      (p.mesh.material as THREE.Material).dispose();
+    });
+    this.chimneySmoke = [];
+
+    if (this.currentLocation === 'farm') {
+      const halfW = (this.gridWidth * this.tileSize) / 2;
+      const halfH = (this.gridHeight * this.tileSize) / 2;
+      const houseX = 13 * this.tileSize - halfW + this.tileSize / 2;
+      const houseZ = 5 * this.tileSize - halfH + this.tileSize / 2;
+      const chimX = houseX - 0.85;
+      const chimZ = houseZ - 0.45;
+      const baseChimY = 3.35;
+
+      const smokeGeo = new THREE.SphereGeometry(0.14, 6, 6);
+      const numPuffs = 6;
+
+      for (let i = 0; i < numPuffs; i++) {
+        const smokeMat = new THREE.MeshBasicMaterial({
+          color: 0xf1f5f9,
+          transparent: true,
+          opacity: 0.35,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(smokeGeo, smokeMat);
+        mesh.frustumCulled = false;
+        const initialY = baseChimY + (i / numPuffs) * 2.0;
+        mesh.position.set(chimX + (i * 0.08), initialY, chimZ);
+        const scale = 0.6 + (i / numPuffs) * 0.9;
+        mesh.scale.set(scale, scale, scale);
+        this.scene.add(mesh);
+
+        this.chimneySmoke.push({
+          mesh,
+          speed: 0.45 + (i % 3) * 0.1,
+          baseScale: 0.6,
+        });
+      }
+    }
+  }
+
+  // --- HOVERING BUMBLEBEES OVER WILDFLOWERS (matching Image 1) ---
+  private setupBumblebees() {
+    this.bumblebees.forEach((b) => {
+      this.scene.remove(b.group);
+      b.leftWing.geometry.dispose();
+      (b.leftWing.material as THREE.Material).dispose();
+      b.rightWing.geometry.dispose();
+      (b.rightWing.material as THREE.Material).dispose();
+    });
+    this.bumblebees = [];
+
+    if (this.currentLocation === 'farm') {
+      const halfW = (this.gridWidth * this.tileSize) / 2;
+      const halfH = (this.gridHeight * this.tileSize) / 2;
+
+      const beeSpawns = [
+        { x: 7.2 * this.tileSize - halfW, z: 9.5 * this.tileSize - halfH, speed: 1.4, phase: 0 },
+        { x: 10.5 * this.tileSize - halfW, z: 12.0 * this.tileSize - halfH, speed: 1.2, phase: 2.3 },
+        { x: 5.5 * this.tileSize - halfW, z: 14.5 * this.tileSize - halfH, speed: 1.5, phase: 4.1 },
+      ];
+
+      const beeBodyMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 });
+      const stripeMat = new THREE.MeshLambertMaterial({ color: 0x0f172a });
+      const wingMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.70 });
+
+      beeSpawns.forEach((sp) => {
+        const bGroup = new THREE.Group();
+
+        // Bee Body
+        const bodyGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.12, 6);
+        bodyGeo.rotateZ(Math.PI / 2);
+        const body = new THREE.Mesh(bodyGeo, beeBodyMat);
+        bGroup.add(body);
+
+        // Black stripes
+        const stripeGeo = new THREE.CylinderGeometry(0.046, 0.046, 0.03, 6);
+        stripeGeo.rotateZ(Math.PI / 2);
+        const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+        bGroup.add(stripe);
+
+        // Wings
+        const wingGeo = new THREE.PlaneGeometry(0.065, 0.045);
+        const leftWing = new THREE.Mesh(wingGeo, wingMat);
+        leftWing.position.set(0, 0.05, 0.03);
+        bGroup.add(leftWing);
+
+        const rightWing = new THREE.Mesh(wingGeo, wingMat);
+        rightWing.position.set(0, 0.05, -0.03);
+        bGroup.add(rightWing);
+
+        bGroup.position.set(sp.x, 0.38, sp.z);
+        this.scene.add(bGroup);
+
+        this.bumblebees.push({
+          group: bGroup,
+          leftWing,
+          rightWing,
+          basePos: new THREE.Vector3(sp.x, 0.38, sp.z),
+          speed: sp.speed,
           phase: sp.phase,
         });
       });
@@ -2712,8 +3178,15 @@ export class GameScene {
       const posX = a.x * this.tileSize - halfW + this.tileSize / 2;
       const posZ = a.z * this.tileSize - halfH + this.tileSize / 2;
 
+      mesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
       mesh.position.set(posX, 0.2, posZ);
-      mesh.frustumCulled = true;
+      mesh.frustumCulled = false;
       this.animalGroup.add(mesh);
     });
   }
@@ -3124,6 +3597,28 @@ export class GameScene {
       });
     }
 
+    // Animate Flowing River Water Illusion (Continuous texture scrolling from Right to Left / East to West)
+    riverWaterTex.offset.x += delta * 0.26;
+    riverWaterTex.offset.y = Math.sin(this.clock.getElapsedTime() * 1.5) * 0.02;
+    waterFoamTex.offset.x += delta * 0.16;
+
+    // Animate Floating River Foam Drift & Current Ribbons flowing East to West
+    if (this.currentLocation === 'farm' && this.riverFoamParticles.length > 0) {
+      const time = this.clock.getElapsedTime();
+      this.riverFoamParticles.forEach((p) => {
+        p.mesh.position.x -= delta * p.speed;
+        p.mesh.position.z = this.getRiverCenterWorldZ(p.mesh.position.x) + p.offsetZ;
+        p.mesh.position.y = -0.042 + Math.sin(time * 3.5 + p.phase) * 0.005;
+        p.mesh.rotation.y = 0.08 * Math.sin(time * 2.0 + p.phase);
+
+        // Reset back to East source once it reaches the lake
+        if (p.mesh.position.x < -10.2) {
+          p.mesh.position.x = 13.5 + Math.random() * 0.8;
+          p.offsetZ = (Math.random() - 0.5) * 0.7;
+        }
+      });
+    }
+
     this.renderer.render(this.scene, this.camera);
     this.lastFrameRenderTimeMs = performance.now() - frameStartTime;
     } catch (err) {
@@ -3196,6 +3691,20 @@ export class GameScene {
   public destroy() {
     this.isDestroyed = true;
     window.removeEventListener('resize', this.onWindowResize);
+    this.pathButterflies.forEach((b) => {
+      this.scene.remove(b.group);
+      b.leftWing.geometry.dispose();
+      (b.leftWing.material as THREE.Material).dispose();
+      b.rightWing.geometry.dispose();
+      (b.rightWing.material as THREE.Material).dispose();
+    });
+    this.pathButterflies = [];
+    this.riverFoamParticles.forEach((p) => {
+      this.scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      (p.mesh.material as THREE.Material).dispose();
+    });
+    this.riverFoamParticles = [];
     if (this.meadowMesh) {
       this.scene.remove(this.meadowMesh);
       this.meadowMesh.geometry.dispose();

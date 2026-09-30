@@ -1,4 +1,4 @@
-import { TileState, DebrisType } from '../types/game';
+import { TileState, DebrisType, CropType, GrowthStage } from '../types/game';
 
 export class MapManager {
   // Generate Farm (Kebun Isopolis) 28x28 Grid
@@ -14,31 +14,67 @@ export class MapManager {
       }
     }
 
-    // 2. Lake / Natural Pond (South-West Corner)
+    // 2. Lake / Natural Pond (South-West Corner: x = 0..4, z = 22..27)
     for (let x = 0; x <= 4; x++) {
       for (let z = 22; z <= 27; z++) {
         map.set(`${x}_${z}`, { x, z, type: 'water' });
       }
     }
 
-    // 3. Selokan / Saluran Air Irigasi (Coretan Biru dari Danau ke Perbatasan Timur)
-    const canalCoords: [number, number][] = [
-      [4, 23], [5, 23], [6, 23], [7, 23], [8, 23], [9, 23], [10, 23],
-      [11, 23], [12, 23], [13, 22], [14, 22], [15, 22], [16, 21], [17, 21],
-      [18, 20], [19, 20], [20, 20], [21, 19], [22, 19], [23, 19], [24, 19],
-      [25, 18], [26, 18], [27, 18],
+    // 3. Sungai Mengalir Alami (Sungai Isopolis dari Kanan / Timur ke Kiri / Barat)
+    // Sungai 2-petak yang mengalir indah dari batas timur (x=27) hingga menyatu ke danau (x=4)
+    const riverCoords: [number, number][] = [
+      // Aliran Timur (x = 27..24, z = 18..20)
+      [27, 18], [27, 19],
+      [26, 18], [26, 19],
+      [25, 18], [25, 19],
+      [24, 18], [24, 19], [24, 20],
+
+      // Kelokan Tengah Timur (x = 23..21, z = 19..21)
+      [23, 19], [23, 20],
+      [22, 19], [22, 20],
+      [21, 19], [21, 20], [21, 21],
+
+      // Aliran Tengah (x = 20..17, z = 20..22)
+      [20, 20], [20, 21],
+      [19, 20], [19, 21],
+      [18, 20], [18, 21],
+      [17, 20], [17, 21], [17, 22],
+
+      // Aliran Tengah Barat (x = 16..13, z = 21..23)
+      [16, 21], [16, 22],
+      [15, 21], [15, 22],
+      [14, 21], [14, 22],
+      [13, 21], [13, 22], [13, 23],
+
+      // Aliran Barat Menuju Jembatan (x = 12..7, z = 22..23)
+      [12, 22], [12, 23],
+      [11, 22], [11, 23],
+      [10, 22], [10, 23],
+      [9, 22], [9, 23],
+      [8, 22], [8, 23],
+      [7, 22], [7, 23],
+
+      // Kolom Jembatan Kayu (x = 6, z = 22..23)
+      // Air sungai mengalir jernih di bawah kolong jembatan kayu!
+      [6, 22], [6, 23],
+
+      // Aliran Muara ke Danau (x = 5..4, z = 22..23)
+      [5, 22], [5, 23],
+      [4, 22], [4, 23],
     ];
-    canalCoords.forEach(([x, z]) => {
+    riverCoords.forEach(([x, z]) => {
       map.set(`${x}_${z}`, { x, z, type: 'water' });
     });
 
     // 4. Jalan Setapak Pedesaan (Single-Track Walking Trail) - Ramping & Cozy
     // A. Jalan Utama Vertikal (Utara - Selatan di x = 6 dari z = 0 hingga 27)
+    // Di z = 22 dan z = 23 air mengalir di bawah dan jembatan kayu terbentang di atasnya
     for (let z = 0; z <= 27; z++) {
-      map.set(`6_${z}`, { x: 6, z, type: 'path' });
+      if (z !== 22 && z !== 23) {
+        map.set(`6_${z}`, { x: 6, z, type: 'path' });
+      }
     }
-    // Catatan: Petak (6, 23) adalah jembatan penyeberangan selokan
-    map.set('6_23', { x: 6, z: 23, type: 'path' });
 
     // B. Jalur Setapak Timur Menuju Rumah Petani, Lumbung & Kincir (z = 7, x = 6 .. 21)
     for (let x = 6; x <= 21; x++) {
@@ -60,15 +96,36 @@ export class MapManager {
       map.set(`${x}_16`, { x, z: 16, type: 'path' });
     }
 
-    // 5. Lahan Tani Pusat (3x3 Soil)
-    for (let x = 12; x <= 14; x++) {
+    // 5. Lahan Tani Pusat (Lush 4x3 Storybook Vegetable Patch matching Image 1)
+    const initialCrops: Record<string, { type: CropType; stage: GrowthStage }> = {
+      '11_12': { type: 'rice', stage: 3 },       // Savoy Cabbage
+      '12_12': { type: 'rice', stage: 3 },       // Savoy Cabbage
+      '13_12': { type: 'carrot', stage: 2 },     // Carrot
+      '14_12': { type: 'rice', stage: 3 },       // Savoy Cabbage
+      '11_13': { type: 'carrot', stage: 3 },     // Carrot with feathery tops
+      '12_13': { type: 'carrot', stage: 3 },     // Carrot
+      '13_13': { type: 'strawberry', stage: 3 }, // Ruby Radish / Strawberry
+      '14_13': { type: 'carrot', stage: 2 },     // Carrot
+      '11_14': { type: 'pumpkin', stage: 3 },    // Golden Pumpkin
+      '12_14': { type: 'rice', stage: 2 },       // Cabbage
+      '13_14': { type: 'pumpkin', stage: 3 },    // Golden Pumpkin
+      '14_14': { type: 'tomato', stage: 3 },     // Tomato / Radish
+    };
+
+    for (let x = 11; x <= 14; x++) {
       for (let z = 12; z <= 14; z++) {
+        const cropInfo = initialCrops[`${x}_${z}`];
         map.set(`${x}_${z}`, {
           x,
           z,
           type: 'soil',
           isWatered: true,
-          crop: x === 13 && z === 13 ? { type: 'rice', stage: 2, plantedAt: Date.now(), lastWateredAt: Date.now() } : undefined,
+          crop: cropInfo ? {
+            type: cropInfo.type,
+            stage: cropInfo.stage,
+            plantedAt: Date.now() - 3600000,
+            lastWateredAt: Date.now(),
+          } : undefined,
         });
       }
     }
@@ -79,12 +136,12 @@ export class MapManager {
       { x: 9, z: 18, debris: 'log' },
       { x: 17, z: 13, debris: 'log' },
       { x: 19, z: 16, debris: 'log' },
-      { x: 14, z: 20, debris: 'log' },
+      { x: 14, z: 19, debris: 'log' },
       { x: 22, z: 12, debris: 'log' },
 
       { x: 10, z: 16, debris: 'wild_tree' },
-      { x: 18, z: 21, debris: 'wild_tree' },
-      { x: 23, z: 21, debris: 'wild_tree' },
+      { x: 18, z: 23, debris: 'wild_tree' },
+      { x: 23, z: 22, debris: 'wild_tree' },
       { x: 10, z: 24, debris: 'wild_tree' },
       { x: 4, z: 12, debris: 'wild_tree' },
 
